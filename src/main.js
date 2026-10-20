@@ -116,6 +116,21 @@ import './styles.css';
   var sb = createClient(SB_URL, SB_KEY);
   var usuarioId = null;
   var authModo = "login";
+  // Setado pelo evento PASSWORD_RECOVERY do Supabase, disparado quando a
+  // página é aberta a partir do link de redefinição enviado por e-mail. O
+  // Supabase cria uma sessão válida nesse momento, mas ela existe só para
+  // permitir updateUser({password}) — iniciar() não deve tratá-la como um
+  // login normal, senão o usuário entraria no app sem nunca definir a nova
+  // senha.
+  var emFluxoRecuperacaoSenha = false;
+  sb.auth.onAuthStateChange(function(event){
+    if (event === "PASSWORD_RECOVERY"){
+      emFluxoRecuperacaoSenha = true;
+      document.getElementById("gate-loading").hidden = true;
+      document.getElementById("gate-auth").hidden = false;
+      mostrarAuthView("redefinir");
+    }
+  });
 
   var state = { alunos: [], aulas: [], pagamentos: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
 
@@ -382,6 +397,80 @@ import './styles.css';
   }
   function setErroAuth(msg){ var e=document.getElementById("auth-erro"); e.textContent=msg||""; e.hidden=!msg; }
   function setMsgAuth(msg){ var e=document.getElementById("auth-msg"); e.textContent=msg||""; e.hidden=!msg; }
+  function setErroRecuperar(msg){ var e=document.getElementById("recuperar-erro"); e.textContent=msg||""; e.hidden=!msg; }
+  function setMsgRecuperar(msg){ var e=document.getElementById("recuperar-msg"); e.textContent=msg||""; e.hidden=!msg; }
+  function setErroRedefinir(msg){ var e=document.getElementById("redefinir-erro"); e.textContent=msg||""; e.hidden=!msg; }
+
+  // Alterna entre as três sub-telas do gate (login/signup, recuperar senha,
+  // redefinir senha). "redefinir" só é alcançada via link de recuperação por
+  // e-mail (evento PASSWORD_RECOVERY do Supabase), nunca por navegação manual.
+  function mostrarAuthView(nome){
+    document.getElementById("authview-principal").hidden = nome !== "principal";
+    document.getElementById("authview-recuperar").hidden = nome !== "recuperar";
+    document.getElementById("authview-redefinir").hidden = nome !== "redefinir";
+  }
+
+  window.irParaRecuperarSenha = function(){
+    setErroRecuperar(""); setMsgRecuperar("");
+    var emailAtual = document.getElementById("auth-email").value.trim();
+    if (emailAtual) document.getElementById("recuperar-email").value = emailAtual;
+    mostrarAuthView("recuperar");
+  };
+  window.voltarParaLogin = function(){
+    setErroAuth(""); setMsgAuth("");
+    authModo = "login";
+    aplicarModoAuth();
+    mostrarAuthView("principal");
+  };
+
+  window.pedirRecuperacaoSenha = async function(ev){
+    ev.preventDefault();
+    var email = document.getElementById("recuperar-email").value.trim();
+    var btn = document.getElementById("recuperar-submit");
+    setErroRecuperar(""); setMsgRecuperar("");
+    if (!email){ setErroRecuperar("Informe seu e-mail."); return; }
+    btn.disabled = true; btn.textContent = "Enviando...";
+    try {
+      var r = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+      if (r.error) throw r.error;
+      // Mensagem deliberadamente igual para e-mail cadastrado ou não: não
+      // confirmar a um visitante quais e-mails têm conta no sistema.
+      setMsgRecuperar("Se esse e-mail tiver uma conta, enviamos um link de redefinição. Confira também a caixa de spam.");
+      btn.textContent = "Enviar link de recuperação";
+      btn.disabled = false;
+    } catch(err){
+      console.error("Erro ao solicitar recuperação de senha:", err);
+      var m = (err && err.message) || "";
+      var msgAmigavel = /security purposes|rate limit/i.test(m)
+        ? "Você já pediu um link recentemente. Aguarde um pouco antes de tentar de novo."
+        : "Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos.";
+      setErroRecuperar(msgAmigavel);
+      btn.disabled = false;
+      btn.textContent = "Enviar link de recuperação";
+    }
+  };
+
+  window.redefinirSenha = async function(ev){
+    ev.preventDefault();
+    var novaSenha = document.getElementById("redefinir-senha").value;
+    var confirma = document.getElementById("redefinir-senha-confirma").value;
+    var btn = document.getElementById("redefinir-submit");
+    setErroRedefinir("");
+    if (novaSenha.length < 6){ setErroRedefinir("A nova senha precisa ter pelo menos 6 caracteres."); return; }
+    if (novaSenha !== confirma){ setErroRedefinir("As senhas não coincidem."); return; }
+    btn.disabled = true; btn.textContent = "Salvando...";
+    try {
+      var r = await sb.auth.updateUser({ password: novaSenha });
+      if (r.error) throw r.error;
+      // Sessão de recuperação já está ativa; entra direto no app.
+      await aposLogin(r.data.session);
+    } catch(err){
+      console.error("Erro ao redefinir senha:", err);
+      setErroRedefinir((err && err.message) || "Não foi possível salvar a nova senha. Peça um novo link de recuperação.");
+      btn.disabled = false;
+      btn.textContent = "Salvar nova senha";
+    }
+  };
 
   function aplicarModoAuth(){
     var login = authModo === "login";
@@ -390,6 +479,7 @@ import './styles.css';
     if (sub) sub.textContent = login ? "Entre na sua conta para continuar" : "Comece a gerenciar seus alunos";
     document.getElementById("auth-submit").textContent = login ? "Entrar" : "Criar conta";
     document.getElementById("auth-toggle").textContent = login ? "Não tem conta? Criar agora" : "Já tem conta? Entrar";
+    document.getElementById("auth-esqueci").hidden = !login;
   }
   window.alternarModoAuth = function(){
     authModo = authModo === "login" ? "signup" : "login";
@@ -466,12 +556,19 @@ import './styles.css';
   async function iniciar(){
     try {
       var s = await sb.auth.getSession();
+      if (emFluxoRecuperacaoSenha){
+        // Sessão de recuperação detectada (ver onAuthStateChange acima); a
+        // tela de redefinir senha já está visível, não prosseguir com login.
+        return;
+      }
       if (s.data.session){ await aposLogin(s.data.session); }
       else { mostrarGateAuth(); }
     } catch(err){
       console.error(err);
-      mostrarGateAuth();
-      setErroAuth("Falha ao conectar no servidor. Tente recarregar a página.");
+      if (!emFluxoRecuperacaoSenha){
+        mostrarGateAuth();
+        setErroAuth("Falha ao conectar no servidor. Tente recarregar a página.");
+      }
     }
   }
 
