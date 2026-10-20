@@ -937,7 +937,7 @@ import './styles.css';
     html += '<div class="recibo-titulo">'+(pago ? "Recibo de pagamento" : "Cobrança")+'</div>';
     html += '<div class="recibo-top-grid">';
     html += '<div class="recibo-prof-row">'+logoHtml+
-      '<div><div class="recibo-prof-label">Personal Trainer</div>'+
+      '<div class="recibo-prof-info"><div class="recibo-prof-label">Personal Trainer</div>'+
       '<div class="recibo-prof-nome">'+(prof.nome||"Personal Trainer")+'</div>'+
       '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+prof.telefone) : "", prof.pix ? ("Pix: "+prof.pix) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
     html += '<div class="recibo-info-grid">'+
@@ -957,8 +957,8 @@ import './styles.css';
   };
 
   window.baixarReciboPDF = function(){
-    var el = document.querySelector("#recibo-conteudo .recibo-doc");
-    if (!el || typeof html2pdf === "undefined"){
+    var original = document.querySelector("#recibo-conteudo .recibo-doc");
+    if (!original || typeof html2pdf === "undefined"){
       mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
       return;
     }
@@ -966,14 +966,59 @@ import './styles.css';
     state.pagamentos.forEach(function(x){ if (x.id===reciboAtualId) p = x; });
     var aluno = p ? getAluno(p.alunoId) : null;
     var nomeArquivo = "recibo-"+(aluno ? aluno.nome.replace(/\s+/g,"-").toLowerCase() : "aluno")+(p && p.dataPagamento ? ("-"+p.dataPagamento) : "")+".pdf";
-    html2pdf().set({
-      margin: 10,
+
+    // PDF compacto: largura fixa (igual ao recibo em tela no desktop, com as duas
+    // colunas), independente do dispositivo em que o botão foi clicado, e altura
+    // calculada a partir da imagem já renderizada do recibo — sem página A4 fixa e
+    // sem espaço em branco sobrando. A altura da página é derivada do canvas
+    // efetivamente gerado (não de uma medição prévia do DOM), para que não haja
+    // nenhuma divergência de arredondamento capaz de criar uma 2ª página em branco.
+    // Gerado num clone fora da tela para não alterar o modal em exibição.
+    var PDF_WIDTH_PX = 640;
+    var MARGIN_MM = 10;
+    var SCALE = 2;
+    var PX_TO_MM = 25.4 / 96;
+
+    var clone = original.cloneNode(true);
+    clone.classList.add("recibo-pdf-mode");
+    var wrap = document.createElement("div");
+    wrap.style.position = "fixed";
+    wrap.style.left = "-10000px";
+    wrap.style.top = "0";
+    wrap.style.width = PDF_WIDTH_PX + "px";
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+
+    function limpar(){ if (wrap.parentNode) document.body.removeChild(wrap); }
+
+    var larguraInicialMM = PDF_WIDTH_PX * PX_TO_MM + MARGIN_MM * 2;
+    var worker = html2pdf().set({
       filename: nomeArquivo,
+      margin: MARGIN_MM,
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, backgroundColor: "#f4f4f6" },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      html2canvas: { scale: SCALE, backgroundColor: "#f4f4f6", windowWidth: PDF_WIDTH_PX },
+      jsPDF: { unit: "mm", format: [larguraInicialMM, 1000], orientation: "portrait" },
       pagebreak: { mode: ["avoid-all"] }
-    }).from(el).save();
+    }).from(clone);
+
+    worker.toCanvas().then(function(){
+      var canvas = worker.prop.canvas;
+      var widthPx = canvas.width / SCALE;
+      // pequena folga (2px) só para blindar contra arredondamento de ponto flutuante
+      // na conversão px→mm; não é perceptível e evita uma eventual página extra em branco.
+      var heightPx = (canvas.height / SCALE) + 2;
+      var pageWidthMM = widthPx * PX_TO_MM + MARGIN_MM * 2;
+      var pageHeightMM = heightPx * PX_TO_MM + MARGIN_MM * 2;
+      worker.prop.pageSize = null;
+      return worker.set({
+        jsPDF: { unit: "mm", format: [pageWidthMM, pageHeightMM], orientation: pageWidthMM >= pageHeightMM ? "landscape" : "portrait" }
+      }).toPdf();
+    }).then(function(){
+      return worker.save();
+    }).then(limpar).catch(function(){
+      limpar();
+      mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
+    });
   };
 
   window.enviarReciboWhats = function(){
