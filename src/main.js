@@ -15,11 +15,16 @@ import './styles.css';
     chevD: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     gear: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="2"/><path d="M19.4 13a1.7 1.7 0 00.34 1.87l.06.06a2.06 2.06 0 11-2.91 2.91l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V19a2.06 2.06 0 01-4.12 0v-.09a1.7 1.7 0 00-1.11-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2.06 2.06 0 11-2.91-2.91l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.55-1H3a2.06 2.06 0 010-4.12h.09A1.7 1.7 0 004.6 6.9a1.7 1.7 0 00-.34-1.87l-.06-.06a2.06 2.06 0 112.91-2.91l.06.06a1.7 1.7 0 001.87.34H9a1.7 1.7 0 001-1.55V3a2.06 2.06 0 014.12 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2.06 2.06 0 112.91 2.91l-.06.06a1.7 1.7 0 00-.34 1.87V9a1.7 1.7 0 001.55 1H21a2.06 2.06 0 010 4.12h-.09a1.7 1.7 0 00-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     recibo: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 7h6M9 11h6M9 15h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    print: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9V2h12v7M6 18H4a1 1 0 01-1-1v-6a1 1 0 011-1h16a1 1 0 011 1v6a1 1 0 01-1 1h-2M6 14h12v8H6v-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>'
+    print: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9V2h12v7M6 18H4a1 1 0 01-1-1v-6a1 1 0 011-1h16a1 1 0 011 1v6a1 1 0 01-1 1h-2M6 14h12v8H6v-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
   };
   var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   var MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   var DIAS = ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
+  var DIAS_ABREV = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  var ASSUMED_SLOT_MIN = 50; // apenas para espaçamento visual na grade; nunca exibido como duração real
 
   var hoje = new Date();
   var agendaData = new Date(hoje); // cursor para dia ou semana, conforme agendaModo
@@ -28,6 +33,9 @@ import './styles.css';
   var remarcandoId = null;
   var agendaBusca = "";
   var alunoBuscaTermo = "";
+  var alunoFiltroStatus = "todos";
+  var alunoFiltroCiclo = "todos";
+  var alunoOrdenacao = "nome-asc";
   var agendaDiasExpandido = {};
 
   function uid(){
@@ -124,7 +132,8 @@ import './styles.css';
       nascimento: r.nascimento, endereco: r.endereco,
       plano: { tipo: r.plano_tipo, cobranca: r.plano_cobranca, valorFixo: Number(r.valor_fixo)||0, valorAula: Number(r.valor_aula)||0 },
       recorrencia: { horarios: r.recorrencia_horarios || {} },
-      ativo: r.ativo !== false
+      ativo: r.ativo !== false,
+      dataCadastro: r.created_at || null
     };
   }
   function aulaToRow(c){
@@ -232,12 +241,22 @@ import './styles.css';
   function setErroAuth(msg){ var e=document.getElementById("auth-erro"); e.textContent=msg||""; e.hidden=!msg; }
   function setMsgAuth(msg){ var e=document.getElementById("auth-msg"); e.textContent=msg||""; e.hidden=!msg; }
 
+  function aplicarModoAuth(){
+    var login = authModo === "login";
+    document.getElementById("auth-titulo").textContent = login ? "Bem-vindo de volta!" : "Crie sua conta";
+    var sub = document.getElementById("auth-subtitle");
+    if (sub) sub.textContent = login ? "Entre na sua conta para continuar" : "Comece a gerenciar seus alunos";
+    document.getElementById("auth-submit").textContent = login ? "Entrar" : "Criar conta";
+    document.getElementById("auth-toggle").textContent = login ? "Não tem conta? Criar agora" : "Já tem conta? Entrar";
+  }
   window.alternarModoAuth = function(){
     authModo = authModo === "login" ? "signup" : "login";
-    document.getElementById("auth-titulo").textContent = authModo==="login" ? "Entrar" : "Criar conta";
-    document.getElementById("auth-submit").textContent = authModo==="login" ? "Entrar" : "Criar conta";
-    document.getElementById("auth-toggle").textContent = authModo==="login" ? "Não tem conta? Criar agora" : "Já tem conta? Entrar";
+    aplicarModoAuth();
     setErroAuth(""); setMsgAuth("");
+  };
+  window.toggleSenha = function(){
+    var inp = document.getElementById("auth-senha");
+    if (inp) inp.type = inp.type === "password" ? "text" : "password";
   };
 
   window.autenticar = async function(ev){
@@ -260,9 +279,7 @@ import './styles.css';
         else {
           setMsgAuth("Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.");
           authModo = "login";
-          document.getElementById("auth-titulo").textContent = "Entrar";
-          document.getElementById("auth-submit").textContent = "Entrar";
-          document.getElementById("auth-toggle").textContent = "Não tem conta? Criar agora";
+          aplicarModoAuth();
           btn.disabled = false;
         }
       }
@@ -561,6 +578,18 @@ import './styles.css';
     alunoBuscaTermo = valor;
     renderAlunos();
   };
+  window.filtrarStatusAlunos = function(valor){
+    alunoFiltroStatus = valor;
+    renderAlunos();
+  };
+  window.filtrarCicloAlunos = function(valor){
+    alunoFiltroCiclo = valor;
+    renderAlunos();
+  };
+  window.ordenarAlunos = function(valor){
+    alunoOrdenacao = valor;
+    renderAlunos();
+  };
   window.filtrarAgenda = function(valor){
     agendaBusca = valor;
     renderAgenda();
@@ -573,11 +602,26 @@ import './styles.css';
 
   window.mudarModoAgenda = function(modo){
     agendaModo = modo;
-    document.querySelectorAll(".seg-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.modo===modo); });
     renderAgenda();
   };
   window.mudarCursorAgenda = function(delta){
     agendaData.setDate(agendaData.getDate() + delta * (agendaModo==="semana" ? 7 : 1));
+    renderAgenda();
+  };
+  window.irParaHoje = function(){
+    agendaData = new Date(hoje);
+    renderAgenda();
+  };
+  window.irParaDiaPill = function(dStr){
+    agendaData = new Date(dStr+"T00:00:00");
+    renderAgenda();
+  };
+  window.abrirAulaDaGrade = function(aulaId){
+    var aula = null;
+    state.aulas.forEach(function(c){ if (c.id===aulaId) aula = c; });
+    if (!aula) return;
+    agendaData = new Date(aula.data+"T00:00:00");
+    agendaModo = "dia";
     renderAgenda();
   };
 
@@ -1156,19 +1200,21 @@ import './styles.css';
     document.getElementById("resumo-calendario").innerHTML = html;
   }
 
-  function renderAcoes(){
+  function renderAcoes(containerId){
     var acoes = [
       { ic: SVG_PEOPLE, cor:"teal", lab:"Novo aluno", fn:"abrirModalAluno()" },
       { ic: SVG_CAL, cor:"violet", lab:"Nova aula", fn:"abrirModalAula()" },
       { ic: SVG_BAG, cor:"amber", lab:"Financeiro", fn:"irParaTab('financeiro')" },
       { ic: SVG_DUMBBELL, cor:"green", lab:"Agenda", fn:"irParaTab('agenda')" }
     ];
-    document.getElementById("resumo-acoes").innerHTML = acoes.map(function(a){
+    var box = document.getElementById(containerId || "resumo-acoes");
+    if (!box) return;
+    box.innerHTML = acoes.map(function(a){
       return '<button class="acao-btn" onclick="'+a.fn+'"><span class="acao-ic dash-stat-ic '+a.cor+'">'+a.ic+'</span>'+a.lab+'</button>';
     }).join("");
   }
 
-  function renderAtividades(){
+  function renderAtividades(containerId){
     var items = [];
     state.aulas.filter(function(c){return c.status==="concluida";}).forEach(function(c){
       var al = getAluno(c.alunoId);
@@ -1180,7 +1226,9 @@ import './styles.css';
     });
     items.sort(function(a,b){ return a.ordem < b.ordem ? 1 : -1; });
     items = items.slice(0,6);
-    document.getElementById("resumo-atividades").innerHTML = items.length ? items.map(function(it){
+    var box = document.getElementById(containerId || "resumo-atividades");
+    if (!box) return;
+    box.innerHTML = items.length ? items.map(function(it){
       return '<div class="atv-row"><div class="atv-ic '+it.cls+'">'+it.ic+'</div>'
         + '<div class="atv-main"><div class="atv-t">'+it.t+'</div><div class="atv-s">'+it.s+'</div></div></div>';
     }).join("") : '<div class="empty-state sm">Sem atividades recentes.</div>';
@@ -1217,30 +1265,173 @@ import './styles.css';
     return html;
   }
 
+  function proximaAulaDoAluno(alunoId){
+    var hojeStr = fmtData(hoje);
+    var futuras = state.aulas.filter(function(c){
+      return c.alunoId===alunoId && c.data>=hojeStr && c.status!=="cancelada" && c.status!=="remarcada" && c.status!=="concluida";
+    }).sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? -1 : 1; });
+    return futuras[0] || null;
+  }
+
   function renderAlunos(){
-    var box = document.getElementById("alunos-lista");
+    var planoLabelMap = {mensal:"Mensal", semanal:"Semanal", avulsa:"Por aula"};
     var termo = normalizar(alunoBuscaTermo);
-    var ativos = state.alunos.filter(function(a){
-      return a.ativo && (!termo || normalizar(a.nome).indexOf(termo)>=0);
+    var termoTelefone = (alunoBuscaTermo||"").replace(/\D/g,"");
+
+    // ---- estatísticas (sobre a base completa, não filtrada) ----
+    var total = state.alunos.length;
+    var ativosCount = state.alunos.filter(function(a){return a.ativo;}).length;
+    var inativosCount = total - ativosCount;
+    var hojeStr = fmtData(hoje);
+    var inicioSemana = new Date(hoje); inicioSemana.setDate(hoje.getDate()-hoje.getDay());
+    var fimSemana = new Date(inicioSemana); fimSemana.setDate(inicioSemana.getDate()+6);
+    var aulasSemana = state.aulas.filter(function(c){ var d=new Date(c.data+"T00:00:00"); return d>=inicioSemana && d<=fimSemana && c.status!=="cancelada" && c.status!=="remarcada"; }).length;
+    var mediaPorAluno = ativosCount ? (aulasSemana/ativosCount) : 0;
+    var mesAtualStr = hojeStr.slice(0,7);
+    var novosEsteMes = state.alunos.filter(function(a){ return a.dataCadastro && String(a.dataCadastro).slice(0,7)===mesAtualStr; }).length;
+
+    function statCard(ic, cor, val, lab, delta){
+      return '<div class="dash-stat kpi"><div class="kpi-top"><div class="dash-stat-ic '+cor+'">'+ic+'</div>'
+        + (delta ? '<span class="dash-stat-delta">'+delta+'</span>' : '') + '</div>'
+        + '<div><div class="dash-stat-val">'+val+'</div><div class="dash-stat-lab">'+lab+'</div></div></div>';
+    }
+    var statsBox = document.getElementById("alunos-stats");
+    if (statsBox){
+      statsBox.innerHTML =
+        statCard(SVG_PEOPLE,"teal",total,"Total de alunos", total ? (novosEsteMes>0 ? "+"+novosEsteMes+" este mês" : "sem novos no mês") : "") +
+        statCard(SVG_CAL,"green",ativosCount,"Alunos ativos", total ? Math.round(ativosCount/total*100)+"% do total" : "") +
+        statCard(SVG_BAG,"amber",inativosCount,"Inativos", total ? Math.round(inativosCount/total*100)+"% do total" : "") +
+        statCard(SVG_DUMBBELL,"violet",aulasSemana,"Aulas na semana", ativosCount ? mediaPorAluno.toFixed(1)+" média/aluno" : "");
+    }
+
+    // ---- resumo lateral (donut ativos x inativos) ----
+    var donutBox = document.getElementById("alunos-resumo-donut");
+    if (donutBox){
+      if (total===0){
+        donutBox.innerHTML = '<div class="empty-state sm">Cadastre o primeiro aluno para ver o resumo.</div>';
+      } else {
+        var pctAtivos = ativosCount/total*100;
+        donutBox.innerHTML =
+          '<div class="donut-wrap">'
+          + '<div class="donut-svg" style="background: conic-gradient(var(--accent) 0 '+pctAtivos+'%, var(--border) '+pctAtivos+'% 100%);"><div class="donut-center">'+total+'<span>'+(total===1?"aluno":"alunos")+'</span></div></div>'
+          + '<div class="donut-legend">'
+          +   '<div class="donut-legend-item"><span class="dot" style="background:var(--accent);"></span>Ativos<b>'+ativosCount+'</b><span class="pct">'+Math.round(pctAtivos)+'%</span></div>'
+          +   '<div class="donut-legend-item"><span class="dot" style="background:var(--border);"></span>Inativos<b>'+inativosCount+'</b><span class="pct">'+Math.round(100-pctAtivos)+'%</span></div>'
+          + '</div></div>';
+      }
+    }
+    renderAtividades("alunos-atividades");
+    renderAcoes("alunos-acoes");
+
+    // ---- lista filtrada ----
+    var lista = state.alunos.filter(function(a){
+      if (alunoFiltroStatus==="ativo" && !a.ativo) return false;
+      if (alunoFiltroStatus==="inativo" && a.ativo) return false;
+      if (alunoFiltroCiclo!=="todos" && a.plano.tipo!==alunoFiltroCiclo) return false;
+      if (termo){
+        var bateNome = normalizar(a.nome).indexOf(termo)>=0;
+        var bateTelefone = termoTelefone && (a.telefone||"").replace(/\D/g,"").indexOf(termoTelefone)>=0;
+        if (!bateNome && !bateTelefone) return false;
+      }
+      return true;
     });
-    box.innerHTML = ativos.length ? ativos.map(function(a){
-      var planoLabel = {mensal:"Mensal", semanal:"Semanal", avulsa:"Por aula"}[a.plano.tipo];
-      return '<div class="card" onclick="abrirDetalheAluno(\''+a.id+'\')" style="cursor:pointer;">'+
-        '<div class="card-row"><div class="card-main" style="display:flex;align-items:center;gap:10px;">'+
-        '<div class="avatar" style="width:34px;height:34px;font-size:12.5px;">'+iniciais(a.nome)+'</div>'+
-        '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+calcIdade(a.nascimento)+' anos · '+a.telefone+'</div></div>'+
-        '</div><span class="badge accent">'+planoLabel+'</span></div></div>';
-    }).join("") : '<div class="empty-state"><div class="display">Nenhum aluno encontrado</div></div>';
+    lista.sort(function(a,b){
+      var r = a.nome.localeCompare(b.nome, "pt-BR");
+      return alunoOrdenacao==="nome-desc" ? -r : r;
+    });
+
+    var tbody = document.getElementById("alunos-tabela-body");
+    var cardsBox = document.getElementById("alunos-cards");
+    var contagemBox = document.getElementById("alunos-contagem");
+
+    if (total===0){
+      var vazioTotal = '<div class="empty-state"><div class="display">Nenhum aluno cadastrado</div>Clique em "Novo aluno" para começar.</div>';
+      if (tbody) tbody.innerHTML = '';
+      if (cardsBox) cardsBox.innerHTML = vazioTotal;
+      if (contagemBox) contagemBox.textContent = "";
+      return;
+    }
+    if (lista.length===0){
+      var vazioFiltro = '<div class="empty-state"><div class="display">Nenhum aluno encontrado</div>Ajuste a busca ou os filtros.</div>';
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6">'+vazioFiltro+'</td></tr>';
+      if (cardsBox) cardsBox.innerHTML = vazioFiltro;
+      if (contagemBox) contagemBox.textContent = "";
+      return;
+    }
+
+    if (tbody){
+      tbody.innerHTML = lista.map(function(a){
+        var prox = proximaAulaDoAluno(a.id);
+        var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : '<span class="card-sub">Nenhuma agendada</span>';
+        return '<tr onclick="abrirDetalheAluno(\''+a.id+'\')">'
+          + '<td><div class="card-row" style="justify-content:flex-start;gap:10px;"><div class="avatar" style="width:34px;height:34px;font-size:12px;">'+iniciais(a.nome)+'</div>'
+          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+calcIdade(a.nascimento)+' anos</div></div></div></td>'
+          + '<td>'+(a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</td>'
+          + '<td><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span></td>'
+          + '<td>'+proxLabel+'</td>'
+          + '<td>'+a.telefone+'</td>'
+          + '<td class="alunos-acoes-col" onclick="event.stopPropagation();">'
+          +   '<button class="icon-btn" title="Ver detalhes" onclick="abrirDetalheAluno(\''+a.id+'\')">'+ICONS.eye+'</button>'
+          +   '<button class="icon-btn" title="Editar" onclick="abrirModalAluno(\''+a.id+'\')">'+ICONS.edit+'</button>'
+          + '</td></tr>';
+      }).join("");
+    }
+    if (cardsBox){
+      cardsBox.innerHTML = lista.map(function(a){
+        var prox = proximaAulaDoAluno(a.id);
+        var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : 'Nenhuma aula agendada';
+        return '<div class="card" onclick="abrirDetalheAluno(\''+a.id+'\')" style="cursor:pointer;">'
+          + '<div class="card-row"><div class="card-main" style="display:flex;align-items:center;gap:10px;">'
+          +   '<div class="avatar" style="width:34px;height:34px;font-size:12.5px;">'+iniciais(a.nome)+'</div>'
+          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+calcIdade(a.nascimento)+' anos · '+a.telefone+'</div></div></div>'
+          + (a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')
+          + '</div>'
+          + '<div class="card-row" style="margin-top:8px;"><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span><span class="card-sub">'+proxLabel+'</span></div>'
+          + '</div>';
+      }).join("");
+    }
+    if (contagemBox) contagemBox.textContent = lista.length + (lista.length===1 ? " aluno encontrado" : " alunos encontrados");
+  }
+
+  function inicioSemanaDe(d){
+    var i = new Date(d); i.setDate(d.getDate()-d.getDay());
+    return i;
+  }
+  function diasDaSemanaAtual(){
+    var inicio = inicioSemanaDe(agendaData);
+    var arr = [];
+    for (var i=0;i<7;i++){ var d = new Date(inicio); d.setDate(inicio.getDate()+i); arr.push(fmtData(d)); }
+    return arr;
   }
 
   function renderAgenda(){
     var temBusca = normalizar(agendaBusca).length > 0;
-    document.getElementById("agenda-seg-toggle").hidden = temBusca;
-    document.getElementById("agenda-day-nav").hidden = temBusca;
+    var secao = document.getElementById("screen-agenda");
+    secao.classList.toggle("modo-semana", agendaModo === "semana" && !temBusca);
+    // sincroniza o toggle Dia/Semana com o modo atual sempre que a Agenda é renderizada,
+    // mesmo quando o modo foi alterado por outra tela (ex.: mini-calendário do Dashboard)
+    document.querySelectorAll("#agenda-seg-toggle .seg-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.modo===agendaModo); });
+    document.getElementById("agenda-toolbar").hidden = temBusca;
+    document.getElementById("agenda-dias-mobile").hidden = temBusca || agendaModo !== "semana";
     var picker = document.getElementById("agenda-datepicker");
     if (picker) picker.value = fmtData(agendaData);
-    if (temBusca){ renderAgendaBusca(agendaBusca); return; }
-    if (agendaModo === "semana") renderAgendaSemana(); else renderAgendaDia();
+
+    if (temBusca){
+      document.getElementById("agenda-semana-grid").hidden = true;
+      renderAgendaBusca(agendaBusca);
+    } else if (agendaModo === "semana"){
+      renderAgendaSemanaGrid();
+      renderDiasMobile();
+      renderAgendaLista(fmtData(agendaData), true);
+      document.getElementById("agenda-semana-grid").hidden = false;
+    } else {
+      document.getElementById("agenda-semana-grid").hidden = true;
+      renderAgendaDia();
+    }
+    renderResumoSemanaAgenda();
+    renderAulasDeHojeRail();
+    renderAgendaAcoes();
+    renderAgendaProximas();
   }
 
   function renderAgendaBusca(termo){
@@ -1255,51 +1446,193 @@ import './styles.css';
     }).join("") : '<div class="empty-state"><div class="display">Nenhuma aula encontrada</div></div>';
   }
 
-  function renderAgendaDia(){
-    document.getElementById("agenda-periodo-label").textContent = capitalizar(diaSemanaLabel(fmtData(agendaData))) + " · " + fmtDataBR(fmtData(agendaData));
-    var dataStr = fmtData(agendaData);
+  function renderAgendaLista(dataStr, comCabecalho){
     var aulasDoDia = state.aulas.filter(function(c){return c.data===dataStr;})
       .sort(function(a,b){ return a.hora<b.hora?-1:1; });
     var box = document.getElementById("agenda-lista");
     var linkRota = rotaDoDiaLink(dataStr);
     var rotaHtml = linkRota ? '<a class="btn sm block" style="margin-bottom:10px;" href="'+linkRota+'" target="_blank" rel="noopener">'+ICONS.route+' Ver rota do dia</a>' : '';
-    box.innerHTML = rotaHtml + (aulasDoDia.length ? aulasDoDia.map(function(c){
+    var cabecalho = "";
+    if (comCabecalho){
+      var ativas = aulasDoDia.filter(function(c){return c.status!=="cancelada" && c.status!=="remarcada";}).length;
+      var rotulo = (dataStr===fmtData(hoje) ? "Hoje · " : "") + capitalizar(diaSemanaLabel(dataStr)) + ", " + fmtDataBR(dataStr).slice(0,5);
+      cabecalho = '<div class="agenda-lista-cabecalho">'+rotulo+'<span>'+ativas+(ativas===1?" aula":" aulas")+'</span></div>';
+    }
+    box.innerHTML = cabecalho + rotaHtml + (aulasDoDia.length ? aulasDoDia.map(function(c){
       return cardAula(c, getAluno(c.alunoId));
     }).join("") : '<div class="empty-state"><div class="display">Sem aulas nesse dia</div></div>');
   }
 
-  function renderAgendaSemana(){
-    var inicio = new Date(agendaData); inicio.setDate(agendaData.getDate()-agendaData.getDay());
+  function renderAgendaDia(){
+    document.getElementById("agenda-periodo-label").textContent = capitalizar(diaSemanaLabel(fmtData(agendaData))) + " · " + fmtDataBR(fmtData(agendaData));
+    renderAgendaLista(fmtData(agendaData), false);
+  }
+
+  function renderDiasMobile(){
+    var dias = diasDaSemanaAtual();
+    var hojeStr = fmtData(hoje);
+    var selStr = fmtData(agendaData);
+    var box = document.getElementById("agenda-dias-mobile");
+    box.innerHTML = dias.map(function(dStr){
+      var d = new Date(dStr+"T00:00:00");
+      var cls = "dia-pill" + (dStr===selStr?" ativo":"") + (dStr===hojeStr?" hoje":"");
+      var n = state.aulas.filter(function(c){ return c.data===dStr && c.status!=="cancelada" && c.status!=="remarcada"; }).length;
+      return '<button class="'+cls+'" onclick="irParaDiaPill(\''+dStr+'\')"><span class="dia-pill-dow">'+DIAS_ABREV[d.getDay()]+'</span><span class="dia-pill-num">'+d.getDate()+'</span>'+(n?'<span class="dia-pill-dot"></span>':'')+'</button>';
+    }).join("");
+  }
+
+  function renderAgendaSemanaGrid(){
+    var inicio = inicioSemanaDe(agendaData);
     var fim = new Date(inicio); fim.setDate(inicio.getDate()+6);
     document.getElementById("agenda-periodo-label").textContent = fmtDataBR(fmtData(inicio)) + " – " + fmtDataBR(fmtData(fim));
 
+    var dias = diasDaSemanaAtual();
     var hojeStr = fmtData(hoje);
-    var html = "";
-    for (var i=0;i<7;i++){
-      var d = new Date(inicio); d.setDate(inicio.getDate()+i);
-      var dStr = fmtData(d);
-      var aulasDia = state.aulas.filter(function(c){return c.data===dStr;})
-        .sort(function(a,b){ return a.hora<b.hora?-1:1; });
-      var expandido = agendaDiasExpandido.hasOwnProperty(dStr) ? agendaDiasExpandido[dStr] : (dStr === hojeStr);
-      var contagem = aulasDia.length ? (aulasDia.length + (aulasDia.length===1 ? " aula" : " aulas")) : "livre";
-      html += '<div class="week-day-header" onclick="toggleDiaSemana(\''+dStr+'\')">'+
-        '<span class="week-day-name">'+capitalizar(diaSemanaLabel(dStr))+' · '+fmtDataBR(dStr)+'</span>'+
-        '<span class="week-day-meta">'+contagem+' <span style="display:inline-flex;transform:rotate('+(expandido?180:0)+'deg);">'+ICONS.chevD+'</span></span>'+
-        '</div>';
-      if (expandido){
-        html += aulasDia.length ? aulasDia.map(function(c){ return cardAula(c, getAluno(c.alunoId)); }).join("")
-          : '<div class="empty-state sm">Sem aulas</div>';
-      }
+    var aulasSemana = state.aulas.filter(function(c){ return dias.indexOf(c.data) >= 0; });
+
+    var horas = aulasSemana.map(function(c){ return parseInt(c.hora.slice(0,2),10); });
+    var minHour = horas.length ? Math.min(7, Math.min.apply(null,horas)) : 7;
+    var maxHour = horas.length ? Math.max(20, Math.max.apply(null,horas)+1) : 20;
+    minHour = Math.max(0, minHour);
+    maxHour = Math.min(23, maxHour);
+    var HOUR_PX = 56;
+    var totalPx = (maxHour-minHour+1)*HOUR_PX;
+
+    var head = '<div class="asg-corner"></div>' + dias.map(function(dStr){
+      var d = new Date(dStr+"T00:00:00");
+      var cls = "asg-day-head" + (dStr===hojeStr?" hoje":"");
+      return '<div class="'+cls+'"><span class="asg-dow">'+DIAS_ABREV[d.getDay()]+'</span><span class="asg-num">'+String(d.getDate()).padStart(2,"0")+'/'+String(d.getMonth()+1).padStart(2,"0")+'</span></div>';
+    }).join("");
+
+    var trilha = "";
+    for (var h=minHour; h<=maxHour; h++){
+      trilha += '<div class="asg-hour-label" style="height:'+HOUR_PX+'px;">'+String(h).padStart(2,"0")+':00</div>';
     }
-    document.getElementById("agenda-lista").innerHTML = html;
+
+    var colunas = dias.map(function(dStr){
+      var doDia = aulasSemana.filter(function(c){return c.data===dStr;}).sort(function(a,b){ return a.hora<b.hora?-1:1; });
+      var lanes = [];
+      var atribuicoes = doDia.map(function(c){
+        var hh = parseInt(c.hora.slice(0,2),10), mm = parseInt(c.hora.slice(3,5),10);
+        var inicioMin = hh*60+mm;
+        var fimMin = inicioMin + ASSUMED_SLOT_MIN;
+        var lane = -1;
+        for (var i=0;i<lanes.length;i++){ if (lanes[i] <= inicioMin){ lane = i; break; } }
+        if (lane === -1){ lane = lanes.length; lanes.push(0); }
+        lanes[lane] = fimMin;
+        return { c:c, inicioMin:inicioMin, lane:lane };
+      });
+      var maxLanes = Math.max(1, lanes.length);
+      var blocos = atribuicoes.map(function(a){
+        var topPx = (a.inicioMin - minHour*60)/60*HOUR_PX;
+        var heightPx = Math.max(38, ASSUMED_SLOT_MIN/60*HOUR_PX - 4);
+        var widthPct = 100/maxLanes;
+        var leftPct = a.lane*widthPct;
+        var aluno = getAluno(a.c.alunoId);
+        var statusCls = "asg-blk-"+a.c.status;
+        var nomeAluno = aluno ? aluno.nome : "";
+        // com várias aulas simultâneas a coluna fica estreita demais para o nome completo;
+        // melhor legibilidade = mostrar o primeiro nome por inteiro em vez de truncar o nome completo no meio
+        var nomeExibido = (maxLanes > 1 && nomeAluno.indexOf(" ") > -1) ? nomeAluno.split(" ")[0] : nomeAluno;
+        var infoCompleta = escapeAttr(a.c.hora+' · '+nomeAluno+' · '+statusBadgeTexto(a.c.status));
+        return '<button type="button" class="asg-bloco '+statusCls+'" style="top:'+topPx+'px;height:'+heightPx+'px;left:calc('+leftPct+'% + 2px);width:calc('+widthPct+'% - 4px);" onclick="abrirAulaDaGrade(\''+a.c.id+'\')" data-tip="'+infoCompleta+'" aria-label="'+infoCompleta+'" title="'+infoCompleta+'">'
+          + '<span class="asg-blk-inner"><span class="asg-blk-hora">'+a.c.hora+'</span><span class="asg-blk-nome">'+nomeExibido+'</span></span></button>';
+      }).join("");
+      var colCls = "asg-col" + (dStr===hojeStr?" hoje":"");
+      return '<div class="'+colCls+'" style="height:'+totalPx+'px;">'+blocos+'</div>';
+    }).join("");
+
+    var html = '<div class="asg-head">'+head+'</div>'
+      + '<div class="asg-body">'
+      + '<div class="asg-trilha">'+trilha+'</div>'
+      + colunas
+      + '</div>';
+    document.getElementById("agenda-semana-grid").innerHTML = html;
   }
 
-  window.toggleDiaSemana = function(dStr){
+  function statusBadgeTexto(status){
+    var map = { agendada:"agendada", confirmada:"confirmada", concluida:"concluída", cancelada:"cancelada", remarcada:"remarcada" };
+    return map[status] || status;
+  }
+
+  function escapeAttr(s){
+    return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+  }
+
+  function renderResumoSemanaAgenda(){
+    var dias = diasDaSemanaAtual();
+    // "remarcada" marca um horário que deixou de valer (a aula já existe de novo, em outra data/hora,
+    // como um registro próprio em state.aulas). Contá-la em "total" somaria a mesma aula duas vezes
+    // e distorceria os percentuais, então o resumo considera apenas os status que representam
+    // um compromisso ativo na semana.
+    var aulas = state.aulas.filter(function(c){ return dias.indexOf(c.data) >= 0 && c.status !== "remarcada"; });
+    var total = aulas.length;
+    var concluidas = aulas.filter(function(c){return c.status==="concluida";}).length;
+    var agendadas = aulas.filter(function(c){return c.status==="agendada" || c.status==="confirmada";}).length;
+    var canceladas = aulas.filter(function(c){return c.status==="cancelada";}).length;
+    function pct(n){ return total ? Math.round(n/total*100)+"% do total" : ""; }
+    function miniStat(ic, cor, val, lab, delta){
+      return '<div class="dash-stat kpi"><div class="kpi-top"><div class="dash-stat-ic '+cor+'">'+ic+'</div>'
+        + (delta ? '<span class="dash-stat-delta">'+delta+'</span>' : '') + '</div>'
+        + '<div><div class="dash-stat-val">'+val+'</div><div class="dash-stat-lab">'+lab+'</div></div></div>';
+    }
+    document.getElementById("agenda-resumo-semana").innerHTML =
+      miniStat(SVG_CAL,"violet",total,"Aulas na semana","") +
+      miniStat(ICONS.check,"green",concluidas,"Concluídas", pct(concluidas)) +
+      miniStat(ICONS.clock,"amber",agendadas,"Agendadas", pct(agendadas)) +
+      miniStat(ICONS.x,"danger",canceladas,"Canceladas", pct(canceladas));
+  }
+
+  function renderAulasDeHojeRail(){
     var hojeStr = fmtData(hoje);
-    var atual = agendaDiasExpandido.hasOwnProperty(dStr) ? agendaDiasExpandido[dStr] : (dStr === hojeStr);
-    agendaDiasExpandido[dStr] = !atual;
-    renderAgendaSemana();
-  };
+    var aulas = state.aulas.filter(function(c){return c.data===hojeStr;}).sort(function(a,b){ return a.hora<b.hora?-1:1; });
+    var box = document.getElementById("agenda-aulas-hoje");
+    if (!box) return;
+    if (!aulas.length){ box.innerHTML = '<div class="empty-state sm">Nenhuma aula hoje.</div>'; return; }
+    box.innerHTML = aulas.map(function(c){
+      var al = getAluno(c.alunoId);
+      return '<div class="aula-row" style="cursor:pointer;" onclick="abrirAulaDaGrade(\''+c.id+'\')"><div class="avatar">'+iniciais(al.nome)+'</div>'
+        + '<div class="aula-row-main"><div class="aula-row-nome">'+al.nome+'</div><div class="aula-row-sub">'+c.hora+' · Aula de Personal</div></div>'
+        + statusBadge(c.status) + '</div>';
+    }).join("");
+  }
+
+  function renderAgendaAcoes(){
+    var acoes = [
+      { ic: SVG_CAL, cor:"violet", lab:"Nova aula", fn:"abrirModalAula()" },
+      { ic: SVG_PEOPLE, cor:"teal", lab:"Novo aluno", fn:"abrirModalAluno()" },
+      { ic: SVG_DUMBBELL, cor:"green", lab:"Ver alunos", fn:"irParaTab('alunos')" },
+      { ic: SVG_BAG, cor:"amber", lab:"Ver financeiro", fn:"irParaTab('financeiro')" }
+    ];
+    var box = document.getElementById("agenda-acoes");
+    if (!box) return;
+    box.innerHTML = acoes.map(function(a){
+      return '<button class="acao-btn" onclick="'+a.fn+'"><span class="acao-ic dash-stat-ic '+a.cor+'">'+a.ic+'</span>'+a.lab+'</button>';
+    }).join("");
+  }
+
+  function renderAgendaProximas(){
+    var hojeStr = fmtData(hoje);
+    var proximas = state.aulas.filter(function(c){
+      return c.data>=hojeStr && c.status!=="cancelada" && c.status!=="remarcada" && c.status!=="concluida";
+    }).sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? -1 : 1; }).slice(0,8);
+    var tbody = document.getElementById("agenda-proximas-body");
+    if (!tbody) return;
+    if (!proximas.length){
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state sm">Nenhuma aula futura agendada.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = proximas.map(function(c){
+      var al = getAluno(c.alunoId);
+      return '<tr>'
+        + '<td>'+fmtDataBR(c.data)+'</td>'
+        + '<td>'+c.hora+'</td>'
+        + '<td>'+al.nome+'</td>'
+        + '<td class="card-sub">'+al.endereco+'</td>'
+        + '<td>'+statusBadge(c.status)+'</td>'
+        + '<td class="alunos-acoes-col"><a class="icon-btn" href="'+mapsLink(al.endereco)+'" target="_blank" rel="noopener" title="Maps">'+ICONS.route+'</a><button class="icon-btn" title="Ver aula" onclick="abrirAulaDaGrade(\''+c.id+'\')">'+ICONS.eye+'</button></td></tr>';
+    }).join("");
+  }
 
   function mesLabel(mesStr){
     var partes = mesStr.split("-");
