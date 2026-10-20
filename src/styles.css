@@ -527,6 +527,7 @@
   .auth-erro { background: rgba(208,70,59,.18); color: #ffb3ab; font-size: 12.5px; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid rgba(208,70,59,.3); }
   .auth-msg { background: rgba(0,229,215,.12); color: var(--accent-bright); font-size: 12.5px; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid rgba(0,229,215,.25); }
   .auth-toggle-link { display: block; width: 100%; text-align: center; background: none; border: none; color: var(--accent-bright); font-size: 14px; font-weight: 700; margin-top: 22px; cursor: pointer; }
+  .auth-forgot-link { display: block; width: 100%; text-align: right; background: none; border: none; color: rgba(255,255,255,.55); font-size: 12.5px; margin: -6px 0 16px; cursor: pointer; }
   @media (max-width: 860px){
     .auth-aside { display: none; }
     .auth-panel { flex: 1; padding: 24px max(18px, env(safe-area-inset-right,0px)) 24px max(18px, env(safe-area-inset-left,0px)); }
