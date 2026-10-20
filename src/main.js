@@ -2543,4 +2543,15 @@ import './styles.css';
   }
 
   iniciar();
+
+  // ---------- PWA: instalável, ícone e abertura em tela cheia ----------
+  // Registro do service worker só cuida do "app shell" (html/js/css/ícones);
+  // nunca intercepta chamadas ao Supabase (ver comentário em public/sw.js).
+  if ("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("/sw.js").catch(function(err){
+        console.error("Falha ao registrar service worker:", err);
+      });
+    });
+  }
 })();
