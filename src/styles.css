@@ -296,7 +296,7 @@
     position: relative;
     background: var(--surface-alt);
     width: 100%;
-    max-width: 460px;
+    max-width: 680px;
     max-height: 88vh;
     overflow-y: auto;
     border-radius: 20px;
@@ -306,34 +306,47 @@
   .modal-document .btn { flex: 1; justify-content: center; }
   .modal-document-close { position: absolute; top: 12px; right: 12px; z-index: 1; background: var(--surface); }
 
-  .recibo-doc { position: relative; background: #ffffff; color: #17181c; border-radius: 14px; padding: 22px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 420px; margin: 0 auto; font-size: 12.5px; }
+  .recibo-doc { position: relative; background: #ffffff; color: #17181c; border-radius: 14px; padding: 28px 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 640px; width: 100%; margin: 0 auto; font-size: 13px; }
   .recibo-brandbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .recibo-wordmark { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; color: #17181c; }
+  .recibo-wordmark { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.02em; color: #17181c; }
   .recibo-wordmark .accent { color: #00B5A9; }
-  .recibo-status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+  .recibo-status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 11px; border-radius: 999px; }
   .recibo-status-pill svg { width: 11px; height: 11px; }
   .recibo-status-pill.pago { background: #e4f6ec; color: #1f8a4c; }
   .recibo-status-pill.aberto { background: #fdf0da; color: #a6690a; }
-  .recibo-tagline { font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9a9ca3; margin-top: 2px; }
-  .recibo-titulo { text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #5c5f68; margin: 16px 0 14px; padding-bottom: 14px; border-bottom: 2px solid #17181c; }
-  .recibo-prof-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .recibo-logo, .recibo-logo-placeholder { width: 44px; height: 44px; border-radius: 9px; flex: none; object-fit: cover; }
+  .recibo-tagline { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9a9ca3; margin-top: 2px; }
+  .recibo-titulo { text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5c5f68; margin: 18px 0 18px; padding-bottom: 16px; border-bottom: 2px solid #17181c; }
+
+  /* duas colunas em telas largas (desktop/tablet/PDF gerado a partir delas):
+     identidade do personal à esquerda, dados da cobrança à direita — reduz a
+     altura total do documento sem perder nenhuma informação. No mobile (abaixo
+     de 760px) permanece empilhado, preservando o formato vertical aprovado. */
+  .recibo-top-grid { display: flex; flex-direction: column; gap: 18px; }
+  .recibo-prof-row { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .recibo-logo, .recibo-logo-placeholder { width: 46px; height: 46px; border-radius: 10px; flex: none; object-fit: cover; }
   .recibo-logo-placeholder { background: #17181c; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; font-family: var(--font-display); }
-  .recibo-prof-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #9a9ca3; }
-  .recibo-prof-nome { font-family: var(--font-display); font-weight: 800; font-size: 13.5px; line-height: 1.3; }
-  .recibo-prof-meta { font-size: 10px; color: #5c5f68; margin-top: 2px; }
-  .recibo-info-grid { margin-bottom: 4px; }
+  .recibo-prof-label { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #9a9ca3; }
+  .recibo-prof-nome { font-family: var(--font-display); font-weight: 800; font-size: 14px; line-height: 1.3; }
+  .recibo-prof-meta { font-size: 10.5px; color: #5c5f68; margin-top: 2px; }
+  .recibo-info-grid { flex: 1; min-width: 0; }
   .recibo-info-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid #ececec; }
   .recibo-info-item:last-child { border-bottom: none; }
-  .recibo-info-ic { flex: none; width: 26px; height: 26px; border-radius: 8px; background: #f0f2f4; color: #5c5f68; display: flex; align-items: center; justify-content: center; }
+  .recibo-info-ic { flex: none; width: 27px; height: 27px; border-radius: 8px; background: #f0f2f4; color: #5c5f68; display: flex; align-items: center; justify-content: center; }
   .recibo-info-ic svg { width: 13px; height: 13px; }
-  .recibo-info-label { display: block; font-size: 10px; color: #8a8d96; }
-  .recibo-info-valor { display: block; font-weight: 700; font-size: 12.5px; color: #17181c; margin-top: 1px; }
-  .recibo-itens-titulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a8d96; margin: 16px 0 5px; }
-  .recibo-item { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 4px 0; }
+  .recibo-info-label { display: block; font-size: 10.5px; color: #8a8d96; }
+  .recibo-info-valor { display: block; font-weight: 700; font-size: 13px; color: #17181c; margin-top: 1px; }
+  .recibo-itens-titulo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a8d96; margin: 20px 0 6px; }
+  .recibo-itens-lista { }
+  .recibo-item { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 5px 0; }
   .recibo-item-dia { color: #17181c; }
-  .recibo-total { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-weight: 800; font-size: 15px; padding: 12px 14px; margin-top: 12px; border-radius: 10px; background: #D7F6F3; color: #0C6B63; }
-  .recibo-footer { margin-top: 16px; font-size: 9.5px; color: #9a9ca3; text-align: center; line-height: 1.5; }
+  .recibo-total { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-weight: 800; font-size: 16px; padding: 14px 18px; margin-top: 14px; border-radius: 10px; background: #D7F6F3; color: #0C6B63; }
+  .recibo-footer { margin-top: 18px; font-size: 10px; color: #9a9ca3; text-align: center; line-height: 1.5; }
+
+  @media (min-width: 760px) {
+    .recibo-top-grid { flex-direction: row; align-items: flex-start; gap: 28px; }
+    .recibo-top-grid .recibo-prof-row { flex: 0 0 44%; padding-right: 20px; border-right: 1px solid #ececec; }
+    .recibo-itens-lista.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  }
 
   .field { margin-bottom: 11px; }
   .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--fg-muted); margin-bottom: 4px; }
@@ -897,4 +910,10 @@
       padding: 18px max(18px, env(safe-area-inset-left,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px, env(safe-area-inset-right,0px));
     }
     .aula-modal-dialog .modal-handle { display: block; }
+
+    /* recibo: mantém o formato vertical, só reduz o respiro interno para caber melhor na tela pequena */
+    .recibo-doc { padding: 20px 18px; font-size: 12.5px; }
+    .recibo-titulo { margin: 14px 0 14px; padding-bottom: 12px; }
+    .recibo-top-grid { gap: 14px; }
+    .recibo-prof-row { margin-bottom: 2px; }
   }

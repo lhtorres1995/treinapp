@@ -935,6 +935,7 @@ import './styles.css';
       '<div class="recibo-status-pill '+(pago?'pago':'aberto')+'">'+(pago?ICONS.check:ICONS.clock)+(pago?'Pago':'Em aberto')+'</div></div>';
     html += '<div class="recibo-tagline">Gestão para Personal Trainers</div>';
     html += '<div class="recibo-titulo">'+(pago ? "Recibo de pagamento" : "Cobrança")+'</div>';
+    html += '<div class="recibo-top-grid">';
     html += '<div class="recibo-prof-row">'+logoHtml+
       '<div><div class="recibo-prof-label">Personal Trainer</div>'+
       '<div class="recibo-prof-nome">'+(prof.nome||"Personal Trainer")+'</div>'+
@@ -944,8 +945,9 @@ import './styles.css';
       '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Referente a</span><span class="recibo-info-valor">'+p.referencia+'</span></div></div>'+
       dataLinha+
       '</div>';
+    html += '</div>';
     html += '<div class="recibo-itens-titulo">Serviços prestados</div>';
-    html += itensHtml;
+    html += '<div class="recibo-itens-lista'+(aulasDoRecibo.length>=4 ? ' cols-2' : '')+'">'+itensHtml+'</div>';
     html += '<div class="recibo-total"><span>'+(pago?"Total pago":"Total a pagar")+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
     html += '<div class="recibo-footer">Recibo emitido em '+fmtDataBR(fmtData(hoje))+' pelo LT360.</div>';
     html += '</div>';
