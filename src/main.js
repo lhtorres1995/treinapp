@@ -202,18 +202,155 @@ import './styles.css';
     }
     snapshotDe(tabela, lista);
   }
-  async function persistir(){
-    if (!usuarioId) return;
-    await sincronizarTabela("alunos", state.alunos, alunoToRow);
-    await sincronizarTabela("aulas", state.aulas, aulaToRow);
-    await sincronizarTabela("pagamentos", state.pagamentos, pagamentoToRow);
+
+  // Sincronização específica de AULAS (C1): como a trigger de capacidade pode
+  // rejeitar uma linha individual, NÃO se pode mandar tudo num upsert em lote
+  // (uma ocorrência conflitante abortaria o lote inteiro). Aqui cada inserção
+  // e cada atualização vai isolada: as válidas persistem, as rejeitadas são
+  // coletadas e o estado local é reconciliado com o servidor. Inserções e
+  // atualizações são separadas de propósito para que a trigger BEFORE INSERT
+  // só dispare em linhas realmente novas.
+  async function sincronizarAulas(){
+    var snap = ultimoSnapshot.aulas;
+    var idsAtuais = {}, novas = [], alteradas = [];
+    state.aulas.forEach(function(item){
+      idsAtuais[item.id] = true;
+      var serial = JSON.stringify(item);
+      if (!(item.id in snap)) novas.push(item);
+      else if (snap[item.id] !== serial) alteradas.push(item);
+    });
+    var paraDeletar = [];
+    Object.keys(snap).forEach(function(id){ if (!idsAtuais[id]) paraDeletar.push(id); });
+
+    var falhas = [];
+    for (var i=0;i<novas.length;i++){
+      var ri = await sb.from("aulas").insert(aulaToRow(novas[i]));
+      if (ri.error) falhas.push({ item: novas[i], error: ri.error, op: "insert" });
+    }
+    for (var j=0;j<alteradas.length;j++){
+      var ru = await sb.from("aulas").update(aulaToRow(alteradas[j])).eq("id", alteradas[j].id);
+      if (ru.error) falhas.push({ item: alteradas[j], error: ru.error, op: "update" });
+    }
+    if (paraDeletar.length){
+      // Exclusões não disparam a trigger. Um erro de banco aqui é coletado
+      // como falha (não lançado), para seguir o MESMO caminho de
+      // reconciliação dos inserts/updates: as linhas não excluídas voltam a
+      // aparecer no reload (verdade do servidor), sem perder as operações
+      // já confirmadas nem as alterações pendentes de outras tabelas.
+      var rd = await sb.from("aulas").delete().in("id", paraDeletar);
+      if (rd.error) falhas.push({ item: null, error: rd.error, op: "delete", ids: paraDeletar });
+    }
+
+    if (!falhas.length){
+      snapshotDe("aulas", state.aulas);
+      return { msg: null, falhas: [] };
+    }
+
+    // Reconciliação: recarrega aulas do servidor (fonte da verdade). Inserts
+    // rejeitados somem; updates rejeitados voltam ao valor do servidor. As
+    // operações bem-sucedidas já estão no servidor e retornam normalmente.
+    // Se ESTE select falhar, a exceção sobe para persistir()/salvarEstado():
+    // não há como dar o retorno { falhas } por certo sem a reconciliação.
+    var au = await sb.from("aulas").select("*");
+    if (au.error) throw au.error;
+    state.aulas = (au.data || []).map(rowToAula);
+    snapshotDe("aulas", state.aulas);
+    return { msg: montarMensagemFalhasAulas(falhas), falhas: falhas };
   }
+
+  function montarMensagemFalhasAulas(falhas){
+    var conflitos = [], exclusoes = 0, outros = 0;
+    falhas.forEach(function(f){
+      var code = (f.error && f.error.code) || "";
+      var msg = (f.error && f.error.message) || "";
+      if (f.op === "delete"){
+        exclusoes += (f.ids ? f.ids.length : 1);
+      } else if (code === "LT004" || /LT004/.test(msg)){
+        conflitos.push((f.item && f.item.data ? fmtDataBR(f.item.data) : "?") + " às " + ((f.item && f.item.hora) || "?"));
+      } else { outros++; }
+    });
+    var partes = [];
+    if (conflitos.length){
+      partes.push(conflitos.length === 1
+        ? "1 horário em conflito de capacidade não foi agendado: " + conflitos[0] + "."
+        : conflitos.length + " horários em conflito de capacidade não foram agendados: " + conflitos.join(", ") + ".");
+    }
+    if (exclusoes) partes.push(exclusoes + " exclusão(ões) não foram concluídas; os registros foram mantidos.");
+    if (outros) partes.push(outros + " operação(ões) não foram salvas por outro motivo.");
+    return partes.join(" ");
+  }
+
+  async function persistir(){
+    if (!usuarioId) return { msg: null, falhas: [] };
+    await sincronizarTabela("alunos", state.alunos, alunoToRow);
+    var resAulas = await sincronizarAulas();
+    await sincronizarTabela("pagamentos", state.pagamentos, pagamentoToRow);
+    return resAulas;
+  }
+  // Fila serial única para TODAS as escritas: persistências de estado e a RPC
+  // de remarcação passam pela mesma fila, de modo que a remarcação nunca
+  // dispute estado/snapshot com uma sincronização pendente (risco 1). A fila
+  // é mantida viva mesmo quando uma tarefa rejeita.
   var filaPersist = Promise.resolve();
+  function enfileirar(tarefa){
+    var p = filaPersist.then(tarefa);
+    filaPersist = p.catch(function(){});
+    return p;
+  }
+  // salvarEstado() devolve SEMPRE um resultado estruturado, nunca mistura
+  // "sucesso" com "não sei o que aconteceu". Os chamadores que precisam saber
+  // exatamente o que foi gravado (recorrência) usam `ok`, `falhasAulas` e
+  // `origem`:
+  //
+  //   ok === true, origem === "gravacao" → a persistência rodou e CONCLUIU
+  //                  (sem exceção não tratada): `falhasAulas` tem o detalhe
+  //                  completo de cada item rejeitado. Esta é a única situação
+  //                  em que se pode falar de "operação concluída" no sentido
+  //                  pleno — o servidor processou exatamente o que foi pedido,
+  //                  linha por linha, e sabemos o resultado de cada uma.
+  //   ok === true, origem === "recarga" → a persistência EXPLODIU no meio
+  //                  (ex.: erro de rede, falha em outra tabela) e a RECARGA de
+  //                  recuperação (carregarDadosDoServidor) teve sucesso.
+  //                  state.aulas passa a refletir com confiança o servidor,
+  //                  mas isso é apenas uma FOTO do estado atual — não uma
+  //                  confirmação de que a operação solicitada como um todo
+  //                  foi concluída (pode ter parado no meio: algumas linhas
+  //                  daquela chamada específica podem nunca ter chegado a ser
+  //                  tentadas). `falhasAulas` vem vazio de propósito — não há
+  //                  causa detalhada conhecida para inventar. Os chamadores
+  //                  que precisam de uma mensagem de sucesso "pleno" (ex.:
+  //                  "aluno salvo", "recorrência atualizada") devem tratar
+  //                  este caso como incerto, não como sucesso equivalente ao
+  //                  de `origem === "gravacao"`.
+  //   ok === false → NEM a gravação NEM a recarga de verificação funcionaram
+  //                  (`origem` ainda vem "recarga", já que foi essa tentativa
+  //                  que falhou). Não há base nenhuma para afirmar o que foi
+  //                  ou não salvo no servidor — os chamadores NUNCA devem
+  //                  apresentar uma mensagem de sucesso ou de contagem neste
+  //                  caso (requisito 4), só avisar que a confirmação não foi
+  //                  possível.
   function salvarEstado(){
-    filaPersist = filaPersist.then(persistir).catch(function(e){
+    return enfileirar(persistir).then(function(res){
+      if (res && res.msg){ mostrarToast(res.msg); renderAll(); }
+      return { ok: true, falhasAulas: (res && res.falhas) || [], origem: "gravacao" };
+    }).catch(function(e){
       console.error("Erro ao salvar:", e);
-      mostrarToast("Erro ao salvar no servidor. Recarregando seus dados...");
-      carregarDadosDoServidor().then(renderAll).catch(function(){});
+      return carregarDadosDoServidor().then(function(){
+        renderAll();
+        mostrarToast("Falha ao salvar. Seus dados foram recarregados do servidor para refletir o estado atual, mas a operação pedida pode não ter sido concluída por completo.");
+        // A recarga teve sucesso: state.aulas agora É a verdade do servidor
+        // NESTE INSTANTE, mas isso não equivale a dizer que a operação
+        // solicitada terminou como pedido — só que sabemos onde as coisas
+        // estão agora. Perdemos também o motivo específico de cada item
+        // ausente (a falha pode ter sido em outra tabela, antes da
+        // sincronização de aulas rodar). falhasAulas vem vazio de propósito —
+        // os chamadores não devem inventar uma causa que não foi observada.
+        return { ok: true, falhasAulas: [], origem: "recarga" };
+      }).catch(function(e2){
+        console.error("Erro ao salvar E ao recarregar:", e2);
+        mostrarToast("Erro ao salvar e também ao recarregar seus dados do servidor. Não é possível confirmar o que foi gravado.");
+        return { ok: false, falhasAulas: [], origem: "recarga" };
+      });
     });
   }
 
@@ -437,7 +574,7 @@ import './styles.css';
     document.getElementById("idade-preview").textContent = v ? (calcIdade(v) + " anos") : "";
   };
 
-  window.salvarAluno = function(ev){
+  window.salvarAluno = async function(ev){
     ev.preventDefault();
     var tipo = document.getElementById("f-plano-tipo").value;
     var cobranca = tipo === "avulsa" ? "por_aula" : document.getElementById("f-plano-cobranca").value;
@@ -479,20 +616,40 @@ import './styles.css';
       alunoId = dados.id;
     }
 
-    var removidas = editando ? limparAulasRecorrenciaFutura(alunoId) : 0;
-    var criadas = Object.keys(horariosRecorrencia).length > 0 ? gerarAulasAPartirDaRecorrencia(alunoId) : 0;
+    var idsParaRemover = editando ? limparAulasRecorrenciaFutura(alunoId) : [];
+    var geradas = Object.keys(horariosRecorrencia).length > 0 ? gerarAulasAPartirDaRecorrencia(alunoId) : [];
 
-    salvarEstado();
+    var resultado = await salvarEstado();   // aguarda para relatar a contagem real
     fecharModal("modal-aluno");
     editingAlunoId = null;
     renderAll();
     abrirDetalheAluno(alunoId);
-    if (removidas > 0 && criadas > 0){
-      mostrarToast("Recorrência atualizada: "+removidas+" aula(s) futura(s) do padrão antigo foram substituídas por "+criadas+" no novo padrão.");
-    } else if (removidas > 0){
+
+    if (!resultado.ok){
+      // Requisito 4: não afirmar que o aluno ou as aulas foram salvos quando
+      // nem a gravação nem a recarga de verificação deram certo.
+      mostrarToast("Não foi possível confirmar no servidor o que foi salvo. Verifique sua conexão e revise os dados do aluno.");
+      return;
+    }
+    if (resultado.origem === "recarga"){
+      // A persistência direta falhou no meio do caminho; a recarga só
+      // confirma uma FOTO do estado atual, não que esta operação específica
+      // (trocar a recorrência, gerar as novas aulas) tenha sido concluída
+      // por completo. Nada de "recorrência atualizada" aqui — só o fato
+      // objetivo e um convite a verificar.
+      mostrarToast("Seus dados foram recarregados após uma falha ao salvar. Verifique a agenda do aluno: a atualização da recorrência pode não ter sido concluída por completo.");
+      return;
+    }
+    var removidas = contarRemocoesConfirmadas(idsParaRemover);
+    var r = contarRecorrentesSalvas(geradas, resultado.falhasAulas);
+    var naoAgendadas = r.rejeitadas + r.naoConfirmadas;
+    if (removidas > 0 && r.salvas > 0){
+      var extra = naoAgendadas > 0 ? " ("+naoAgendadas+" não agendada(s))" : "";
+      mostrarToast("Recorrência atualizada: "+removidas+" aula(s) futura(s) do padrão antigo substituída(s) por "+r.salvas+" no novo padrão"+extra+".");
+    } else if (removidas > 0 && r.salvas === 0 && geradas.length === 0){
       mostrarToast(removidas+" aula(s) futura(s) do padrão antigo foram removidas da agenda.");
-    } else if (criadas > 0){
-      mostrarToast(criadas+" aula(s) recorrente(s) já entraram na agenda (próximas 8 semanas).");
+    } else if (geradas.length > 0){
+      mostrarToast(mensagemRecorrencia(r.salvas, r.rejeitadas, r.naoConfirmadas));
     }
   };
 
@@ -577,31 +734,79 @@ import './styles.css';
     pedirConfirmacao("Cancelar aula", "Tem certeza que quer cancelar essa aula? Essa ação pode ser desfeita remarcando depois.", "Cancelar aula", function(){ cancelarAula(id); });
   };
 
-  window.salvarAula = function(ev){
+  window.salvarAula = async function(ev){
     ev.preventDefault();
-    var novaAula = {
-      id: uid(),
-      alunoId: document.getElementById("fa-aluno").value,
-      data: document.getElementById("fa-data").value,
-      hora: document.getElementById("fa-hora").value,
-      status: "agendada",
-      faturada: false,
-      origem: "manual"
-    };
-    state.aulas.push(novaAula);
+    var data = document.getElementById("fa-data").value;
+    var hora = document.getElementById("fa-hora").value;
 
     if (remarcandoId){
-      state.aulas.forEach(function(c){
-        if (c.id===remarcandoId){ c.status = "remarcada"; c.remarcadaParaId = novaAula.id; }
-      });
-      mostrarToast("Aula remarcada.");
-      remarcandoId = null;
+      // C2 — Remarcação atômica: a RPC cria a nova aula e marca a original na
+      // mesma transação no banco. Se a nova colidir por capacidade (LT004) ou
+      // qualquer outra validação, a função aborta e a original fica intacta.
+      // O aluno/professor/duração são preservados da original pela própria RPC
+      // (o seletor de aluno do modal é ignorado na remarcação, por desenho).
+      var idOriginal = remarcandoId;
+      var btn = document.getElementById("modal-aula-submit");
+      if (btn) btn.disabled = true;
+      try {
+        // A RPC + o alinhamento de estado/snapshot rodam DENTRO da fila, após
+        // qualquer sincronização pendente, para não disputar estado nem ser
+        // reenviada como atualização local (risco 1). O estado só é mutado em
+        // caso de sucesso, então uma falha nunca deixa alteração local parcial.
+        await enfileirar(function(){
+          return sb.rpc("remarcar_aula", {
+            p_aula_original_id: idOriginal,
+            p_nova_data: data,
+            p_nova_hora: hora
+          }).then(function(r){
+            if (r.error) throw r.error;
+            var nova = rowToAula(r.data);
+            if (!state.aulas.some(function(c){ return c.id===nova.id; })) state.aulas.push(nova);
+            var origObj = null;
+            state.aulas.forEach(function(c){
+              if (c.id===idOriginal){ c.status = "remarcada"; c.remarcadaParaId = nova.id; origObj = c; }
+            });
+            ultimoSnapshot.aulas[nova.id] = JSON.stringify(nova);
+            if (origObj) ultimoSnapshot.aulas[idOriginal] = JSON.stringify(origObj);
+          });
+        });
+        remarcandoId = null;
+        if (btn) btn.disabled = false;
+        fecharModal("modal-aula");
+        renderAll();
+        mostrarToast("Aula remarcada.");
+      } catch(err){
+        if (btn) btn.disabled = false;
+        mostrarToast(mensagemErroRemarcacao(err));
+      }
+      return;
     }
 
+    // Nova aula (fluxo otimista): entra no estado e a sincronização valida a
+    // capacidade; se houver conflito, a reconciliação remove e avisa.
+    var novaAula = {
+      id: uid(), alunoId: document.getElementById("fa-aluno").value,
+      data: data, hora: hora, status: "agendada", faturada: false, origem: "manual"
+    };
+    state.aulas.push(novaAula);
     salvarEstado();
     fecharModal("modal-aula");
     renderAll();
   };
+
+  function mensagemErroRemarcacao(err){
+    var code = (err && err.code) || "";
+    var msg = (err && err.message) || "";
+    if (code === "LT004" || /LT004/.test(msg))
+      return "Não foi possível remarcar: o novo horário excede a capacidade simultânea. A aula original foi mantida.";
+    if (code === "LT011" || /LT011/.test(msg))
+      return "Essa aula não pode ser remarcada (o status atual não permite).";
+    if (code === "LT010" || /LT010/.test(msg))
+      return "Aula original não encontrada.";
+    if (code === "LT009" || /LT009/.test(msg))
+      return "Configuração de isolamento incompatível no servidor. Nenhuma alteração foi feita.";
+    return "Não foi possível remarcar agora. A aula original foi mantida.";
+  }
 
   window.filtrarAlunos = function(valor){
     alunoBuscaTermo = valor;
@@ -744,22 +949,39 @@ import './styles.css';
 
   var HORIZONTE_RECORRENCIA_SEMANAS = 8;
 
+  // Devolve os IDS removidos localmente (não uma contagem), para que o
+  // chamador possa, DEPOIS da persistência/reconciliação, verificar quais
+  // realmente desapareceram no servidor — uma exclusão otimista aqui não é
+  // garantia de exclusão confirmada (ver sincronizarAulas: uma falha de
+  // DELETE traz o registro de volta ao estado local).
   function limparAulasRecorrenciaFutura(alunoId){
     var hojeStr = fmtData(hoje);
-    var removidas = 0;
+    var idsRemovidos = [];
     state.aulas = state.aulas.filter(function(c){
       var remover = c.alunoId===alunoId && c.origem==="recorrencia" && c.status==="agendada" && c.data>=hojeStr;
-      if (remover) removidas++;
+      if (remover) idsRemovidos.push(c.id);
       return !remover;
     });
-    return removidas;
+    return idsRemovidos;
   }
 
+  // Dada a lista de ids removidos localmente, conta quantos estão
+  // CONFIRMADAMENTE ausentes de state.aulas depois da persistência/recarga
+  // (verdade do servidor) — nunca apenas a contagem otimista local.
+  function contarRemocoesConfirmadas(idsRemovidos){
+    return idsRemovidos.filter(function(id){
+      return !state.aulas.some(function(c){ return c.id===id; });
+    }).length;
+  }
+
+  // Retorna a lista de ocorrências CRIADAS (objetos), para que o chamador
+  // possa, após a persistência, saber quantas realmente foram salvas e
+  // quantas foram rejeitadas pela trigger de capacidade.
   function gerarAulasAPartirDaRecorrencia(alunoId){
     var aluno = getAluno(alunoId);
     var horarios = aluno.recorrencia && aluno.recorrencia.horarios;
-    if (!horarios || Object.keys(horarios).length===0) return 0;
-    var criadas = 0;
+    if (!horarios || Object.keys(horarios).length===0) return [];
+    var criadas = [];
     var cursor = new Date(hoje);
     for (var i=0; i<HORIZONTE_RECORRENCIA_SEMANAS*7; i++){
       var dStr = fmtData(cursor);
@@ -767,8 +989,9 @@ import './styles.css';
       if (horarioDoDia){
         var existeNoDia = state.aulas.some(function(c){ return c.alunoId===alunoId && c.data===dStr; });
         if (!existeNoDia){
-          state.aulas.push({ id: uid(), alunoId: alunoId, data: dStr, hora: horarioDoDia, status: "agendada", faturada: false, origem: "recorrencia" });
-          criadas++;
+          var ocorrencia = { id: uid(), alunoId: alunoId, data: dStr, hora: horarioDoDia, status: "agendada", faturada: false, origem: "recorrencia" };
+          state.aulas.push(ocorrencia);
+          criadas.push(ocorrencia);
         }
       }
       cursor.setDate(cursor.getDate()+1);
@@ -776,19 +999,76 @@ import './styles.css';
     return criadas;
   }
 
-  window.gerarAulasRecorrentes = function(alunoId){
+  // Dada a lista de ocorrências geradas e as falhas efetivas de aulas
+  // devolvidas por salvarEstado(), classifica cada ocorrência em:
+  //   salva        — presente em state.aulas após a reconciliação (verdade
+  //                  do servidor, não mera presença otimista pré-gravação).
+  //   rejeitada     — ausente E com uma falha LT004 registrada para o id.
+  //   naoConfirmada — ausente, mas SEM falha LT004 conhecida (a causa real
+  //                  pode ser outro erro de banco, ou a falha ocorreu em
+  //                  outra tabela antes da sincronização de aulas rodar, ou
+  //                  a recarga de verificação falhou). Nunca é rotulada como
+  //                  "conflito de horário" sem evidência de LT004.
+  function contarRecorrentesSalvas(geradas, falhasAulas){
+    var porCapacidade = {};
+    (falhasAulas || []).forEach(function(f){
+      var code = (f.error && f.error.code) || "";
+      var msg = (f.error && f.error.message) || "";
+      if (f.item && (code === "LT004" || /LT004/.test(msg))) porCapacidade[f.item.id] = true;
+    });
+    var salvas = 0, rejeitadas = 0, naoConfirmadas = 0;
+    geradas.forEach(function(o){
+      if (state.aulas.some(function(c){ return c.id===o.id; })) salvas++;
+      else if (porCapacidade[o.id]) rejeitadas++;
+      else naoConfirmadas++;
+    });
+    return { salvas: salvas, rejeitadas: rejeitadas, naoConfirmadas: naoConfirmadas };
+  }
+
+  window.gerarAulasRecorrentes = async function(alunoId){
     var aluno = getAluno(alunoId);
     var horarios = aluno.recorrencia && aluno.recorrencia.horarios;
     if (!horarios || Object.keys(horarios).length===0){
       mostrarToast("Defina os dias e horários fixos desse aluno primeiro.");
       return;
     }
-    var criadas = gerarAulasAPartirDaRecorrencia(alunoId);
-    salvarEstado();
+    var geradas = gerarAulasAPartirDaRecorrencia(alunoId);
+    if (geradas.length===0){
+      renderAll();
+      abrirDetalheAluno(alunoId);
+      mostrarToast("Nada novo: essas datas já estavam na agenda.");
+      return;
+    }
+    var resultado = await salvarEstado();   // só conta depois de saber o que persistiu
     renderAll();
     abrirDetalheAluno(alunoId);
-    mostrarToast(criadas>0 ? criadas+" aula(s) geradas para as próximas "+HORIZONTE_RECORRENCIA_SEMANAS+" semanas." : "Nada novo: essas datas já estavam na agenda.");
+    if (!resultado.ok){
+      // Requisito 4: nunca apresentar confirmação de sucesso quando a
+      // gravação e a recarga de verificação falharem — nem "salvas", nem
+      // "rejeitadas por conflito", porque não há como saber.
+      mostrarToast("Não foi possível confirmar se as aulas recorrentes foram salvas no servidor. Verifique sua conexão e revise a agenda do aluno.");
+      return;
+    }
+    if (resultado.origem === "recarga"){
+      // A persistência direta falhou no meio do caminho; a recarga só
+      // confirma a foto atual do servidor, não que esta geração específica
+      // foi concluída por completo (pode ter parado antes de tentar algumas
+      // das ocorrências desta chamada).
+      mostrarToast("Seus dados foram recarregados após uma falha ao salvar. Verifique a agenda do aluno: a geração de aulas recorrentes pode não ter sido concluída por completo.");
+      return;
+    }
+    var r = contarRecorrentesSalvas(geradas, resultado.falhasAulas);
+    mostrarToast(mensagemRecorrencia(r.salvas, r.rejeitadas, r.naoConfirmadas));
   };
+
+  function mensagemRecorrencia(salvas, rejeitadas, naoConfirmadas){
+    var partes = [];
+    if (salvas>0) partes.push(salvas+" aula(s) recorrente(s) entraram na agenda (próximas "+HORIZONTE_RECORRENCIA_SEMANAS+" semanas).");
+    if (rejeitadas>0) partes.push(rejeitadas+" não foram agendadas por conflito de capacidade.");
+    if (naoConfirmadas>0) partes.push(naoConfirmadas+" não foram confirmadas no servidor (erro ao salvar).");
+    if (!partes.length) return "Nenhuma aula recorrente nova.";
+    return partes.join(" ");
+  }
 
   window.marcarPago = function(id){
     state.pagamentos.forEach(function(p){
