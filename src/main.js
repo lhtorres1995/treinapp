@@ -19,7 +19,9 @@ import './styles.css';
     eye: '<svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>',
     clock: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     x: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    alert: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L2 20h20L12 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    alert: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L2 20h20L12 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    user: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="currentColor" stroke-width="2"/><path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    calendar: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
   };
   var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   var MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -393,6 +395,8 @@ import './styles.css';
       horarioInput.value = "";
     });
     document.getElementById("modal-aluno-titulo").textContent = id ? "Editar aluno" : "Novo aluno";
+    document.getElementById("modal-aluno-subtitulo").textContent = id ? "Atualize as informações e configurações do aluno." : "Preencha os dados para cadastrar o aluno.";
+    document.getElementById("modal-aluno-submit").textContent = id ? "Salvar alterações" : "Salvar aluno";
 
     if (id){
       var a = getAluno(id);
@@ -500,7 +504,28 @@ import './styles.css';
     }).join("");
     document.getElementById("fa-data").value = fmtData(agendaData);
     document.getElementById("fa-hora").value = "07:00";
+    atualizarResumoAula();
     abrirModal("modal-aula");
+  };
+
+  // resumo visual do modal "Nova aula": apenas reflete os campos já preenchidos
+  // (aluno, data, horário), sem introduzir duração ou qualquer dado novo.
+  window.atualizarResumoAula = function(){
+    var elResumo = document.getElementById("aula-resumo-conteudo");
+    if (!elResumo) return;
+    var selEl = document.getElementById("fa-aluno");
+    var dataVal = document.getElementById("fa-data").value;
+    var horaVal = document.getElementById("fa-hora").value;
+    var alunoNome = (selEl && selEl.selectedOptions && selEl.selectedOptions[0]) ? selEl.selectedOptions[0].textContent : "—";
+    var dataLabel = "—";
+    if (dataVal){
+      var d = new Date(dataVal+"T00:00:00");
+      dataLabel = fmtDataBR(dataVal) + " (" + DIAS[d.getDay()] + ")";
+    }
+    elResumo.innerHTML =
+      '<div class="aula-resumo-linha"><span>Aluno</span><span>'+alunoNome+'</span></div>'+
+      '<div class="aula-resumo-linha"><span>Data</span><span>'+dataLabel+'</span></div>'+
+      '<div class="aula-resumo-linha"><span>Horário</span><span>'+(horaVal||"—")+'</span></div>';
   };
 
   window.abrirModalRemarcar = function(aulaId){
@@ -518,6 +543,7 @@ import './styles.css';
     novaData.setDate(novaData.getDate()+1);
     document.getElementById("fa-data").value = fmtData(novaData);
     document.getElementById("fa-hora").value = aulaOriginal.hora;
+    atualizarResumoAula();
     abrirModal("modal-aula");
   };
 
@@ -891,31 +917,37 @@ import './styles.css';
     var itensHtml = "";
     if (aulasDoRecibo.length){
       var valorUnit = aluno.plano.cobranca === "por_aula" ? aluno.plano.valorAula : null;
-      itensHtml += '<div class="recibo-itens-titulo">'+aulasDoRecibo.length+(aulasDoRecibo.length===1 ? ' aula dada no período' : ' aulas dadas no período')+'</div>';
       aulasDoRecibo.forEach(function(c){
         var d = new Date(c.data+"T00:00:00");
         var diaSemana = capitalizar(nomesDias()[d.getDay()]);
         itensHtml += '<div class="recibo-item"><span class="recibo-item-dia">'+diaSemana+' · '+fmtDataBR(c.data)+' · '+c.hora+'</span>'+(valorUnit!==null ? ('<span>'+fmtMoeda(valorUnit)+'</span>') : '')+'</div>';
       });
-    } else if (p.periodoLabel){
-      itensHtml += '<div class="recibo-itens-titulo">Referente a</div>';
-      itensHtml += '<div class="recibo-item"><span>'+p.periodoLabel+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
+    } else {
+      itensHtml += '<div class="recibo-item"><span class="recibo-item-dia">'+p.referencia+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
     }
 
+    var dataLinha = pago
+      ? '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.calendar+'</span><div><span class="recibo-info-label">Data do pagamento</span><span class="recibo-info-valor">'+fmtDataBR(p.dataPagamento)+'</span></div></div>'
+      : (p.dataVencimento ? '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.calendar+'</span><div><span class="recibo-info-label">Vencimento</span><span class="recibo-info-valor">'+fmtDataBR(p.dataVencimento)+'</span></div></div>' : '');
+
     var html = '<div class="recibo-doc">';
-    html += '<div class="recibo-stamp '+(pago?'pago':'aberto')+'">'+(pago?'Pago':'Em aberto')+'</div>';
-    html += '<div class="recibo-header">'+logoHtml+
-      '<div><div class="recibo-prof-nome">'+(prof.nome||"Personal Trainer")+'</div>'+
-      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+prof.telefone) : "", prof.pix ? ("Pix: "+prof.pix) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
+    html += '<div class="recibo-brandbar"><div class="recibo-wordmark">LT<span class="accent">360</span></div>'+
+      '<div class="recibo-status-pill '+(pago?'pago':'aberto')+'">'+(pago?ICONS.check:ICONS.clock)+(pago?'Pago':'Em aberto')+'</div></div>';
+    html += '<div class="recibo-tagline">Gestão para Personal Trainers</div>';
     html += '<div class="recibo-titulo">'+(pago ? "Recibo de pagamento" : "Cobrança")+'</div>';
-    html += '<div class="recibo-linha"><span>Aluno</span><span>'+aluno.nome+'</span></div>';
-    html += '<div class="recibo-linha"><span>Referente a</span><span>'+p.referencia+'</span></div>';
-    html += pago
-      ? '<div class="recibo-linha"><span>Data do pagamento</span><span>'+fmtDataBR(p.dataPagamento)+'</span></div>'
-      : (p.dataVencimento ? '<div class="recibo-linha"><span>Vencimento</span><span>'+fmtDataBR(p.dataVencimento)+'</span></div>' : '');
+    html += '<div class="recibo-prof-row">'+logoHtml+
+      '<div><div class="recibo-prof-label">Personal Trainer</div>'+
+      '<div class="recibo-prof-nome">'+(prof.nome||"Personal Trainer")+'</div>'+
+      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+prof.telefone) : "", prof.pix ? ("Pix: "+prof.pix) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
+    html += '<div class="recibo-info-grid">'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+aluno.nome+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Referente a</span><span class="recibo-info-valor">'+p.referencia+'</span></div></div>'+
+      dataLinha+
+      '</div>';
+    html += '<div class="recibo-itens-titulo">Serviços prestados</div>';
     html += itensHtml;
     html += '<div class="recibo-total"><span>'+(pago?"Total pago":"Total a pagar")+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
-    html += '<div class="recibo-footer">Documento gerado pelo Trainer Flow em '+fmtDataBR(fmtData(hoje))+'.</div>';
+    html += '<div class="recibo-footer">Recibo emitido em '+fmtDataBR(fmtData(hoje))+' pelo LT360.</div>';
     html += '</div>';
 
     document.getElementById("recibo-conteudo").innerHTML = html;
@@ -933,11 +965,12 @@ import './styles.css';
     var aluno = p ? getAluno(p.alunoId) : null;
     var nomeArquivo = "recibo-"+(aluno ? aluno.nome.replace(/\s+/g,"-").toLowerCase() : "aluno")+(p && p.dataPagamento ? ("-"+p.dataPagamento) : "")+".pdf";
     html2pdf().set({
-      margin: 8,
+      margin: 10,
       filename: nomeArquivo,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 2, backgroundColor: "#f4f4f6" },
-      jsPDF: { unit: "mm", format: "a5", orientation: "portrait" }
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all"] }
     }).from(el).save();
   };
 

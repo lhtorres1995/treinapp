@@ -230,19 +230,52 @@
     background: rgba(0,0,0,0.4);
     z-index: 50;
     display: none;
-    align-items: flex-end;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
   }
   .modal-overlay.open { display: flex; }
   .modal-sheet {
     background: var(--surface);
     width: 100%;
+    max-width: 460px;
     max-height: 88vh;
     overflow-y: auto;
-    border-radius: 18px 18px 0 0;
-    padding: 16px max(16px, env(safe-area-inset-left,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
+    border-radius: 18px;
+    padding: 20px;
   }
-  .modal-handle { width: 36px; height: 4px; border-radius: 99px; background: var(--border); margin: 0 auto 12px; }
+  .modal-sheet.lg { max-width: 560px; }
+  .modal-handle { display: none; width: 36px; height: 4px; border-radius: 99px; background: var(--border); margin: 0 auto 12px; }
   .modal-title { font-size: 16px; font-weight: 800; margin-bottom: 14px; }
+
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .modal-head .modal-title { margin-bottom: 3px; }
+  .modal-subtitle { font-size: 12px; color: var(--fg-muted); }
+  .modal-close {
+    flex: none; width: 30px; height: 30px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-alt); color: var(--fg-muted);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  }
+  .modal-close svg { width: 14px; height: 14px; }
+  .modal-close:hover { background: var(--border); color: var(--fg); }
+
+  .modal-section { padding: 14px 0; border-top: 1px solid var(--border); }
+  .modal-section:first-of-type { border-top: none; padding-top: 0; }
+  .modal-section-title {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--font-display); font-weight: 800; font-size: 12.5px; color: var(--fg);
+    margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .modal-section-title svg { width: 15px; height: 15px; color: var(--accent); flex: none; }
+
+  .field-row.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+  .aula-resumo { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; margin: 4px 0 14px; }
+  .aula-resumo-titulo { display: flex; align-items: center; gap: 7px; font-family: var(--font-display); font-weight: 800; font-size: 12px; margin-bottom: 8px; }
+  .aula-resumo-titulo svg { width: 14px; height: 14px; color: var(--accent); }
+  .aula-resumo-linha { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 4px 0; }
+  .aula-resumo-linha span:first-child { color: var(--fg-muted); }
+  .aula-resumo-linha span:last-child { font-weight: 700; text-align: right; }
 
   .modal-overlay.center { align-items: center; justify-content: center; padding: 20px; }
   .modal-dialog {
@@ -260,9 +293,10 @@
   .logo-preview img { width: 100%; height: 100%; object-fit: cover; }
 
   .modal-document {
+    position: relative;
     background: var(--surface-alt);
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
     max-height: 88vh;
     overflow-y: auto;
     border-radius: 20px;
@@ -270,25 +304,35 @@
   }
   .modal-document .action-row { margin-top: 12px; }
   .modal-document .btn { flex: 1; justify-content: center; }
+  .modal-document-close { position: absolute; top: 12px; right: 12px; z-index: 1; background: var(--surface); }
 
-  .recibo-doc { position: relative; background: #ffffff; color: #17181c; border-radius: 14px; padding: 20px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 360px; margin: 0 auto; font-size: 12.5px; }
-  .recibo-stamp { position: absolute; top: 14px; right: 14px; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; }
-  .recibo-stamp.pago { background: #e4f6ec; color: #1f8a4c; }
-  .recibo-stamp.aberto { background: #fdf0da; color: #a6690a; }
-  .recibo-header { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; padding-right: 70px; border-bottom: 2px solid #17181c; margin-bottom: 14px; }
+  .recibo-doc { position: relative; background: #ffffff; color: #17181c; border-radius: 14px; padding: 22px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 420px; margin: 0 auto; font-size: 12.5px; }
+  .recibo-brandbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .recibo-wordmark { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; color: #17181c; }
+  .recibo-wordmark .accent { color: #00B5A9; }
+  .recibo-status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; }
+  .recibo-status-pill svg { width: 11px; height: 11px; }
+  .recibo-status-pill.pago { background: #e4f6ec; color: #1f8a4c; }
+  .recibo-status-pill.aberto { background: #fdf0da; color: #a6690a; }
+  .recibo-tagline { font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9a9ca3; margin-top: 2px; }
+  .recibo-titulo { text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #5c5f68; margin: 16px 0 14px; padding-bottom: 14px; border-bottom: 2px solid #17181c; }
+  .recibo-prof-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .recibo-logo, .recibo-logo-placeholder { width: 44px; height: 44px; border-radius: 9px; flex: none; object-fit: cover; }
   .recibo-logo-placeholder { background: #17181c; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; font-family: var(--font-display); }
-  .recibo-prof-nome { font-family: var(--font-display); font-weight: 800; font-size: 13.5px; line-height: 1.25; }
+  .recibo-prof-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #9a9ca3; }
+  .recibo-prof-nome { font-family: var(--font-display); font-weight: 800; font-size: 13.5px; line-height: 1.3; }
   .recibo-prof-meta { font-size: 10px; color: #5c5f68; margin-top: 2px; }
-  .recibo-titulo { text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #5c5f68; margin-bottom: 12px; }
-  .recibo-linha { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #ececec; }
-  .recibo-linha:last-child { border-bottom: none; }
-  .recibo-linha span:first-child { color: #5c5f68; flex: none; }
-  .recibo-linha span:last-child { text-align: right; }
-  .recibo-itens-titulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a8d96; margin: 14px 0 5px; }
-  .recibo-item { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+  .recibo-info-grid { margin-bottom: 4px; }
+  .recibo-info-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid #ececec; }
+  .recibo-info-item:last-child { border-bottom: none; }
+  .recibo-info-ic { flex: none; width: 26px; height: 26px; border-radius: 8px; background: #f0f2f4; color: #5c5f68; display: flex; align-items: center; justify-content: center; }
+  .recibo-info-ic svg { width: 13px; height: 13px; }
+  .recibo-info-label { display: block; font-size: 10px; color: #8a8d96; }
+  .recibo-info-valor { display: block; font-weight: 700; font-size: 12.5px; color: #17181c; margin-top: 1px; }
+  .recibo-itens-titulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8a8d96; margin: 16px 0 5px; }
+  .recibo-item { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 4px 0; }
   .recibo-item-dia { color: #17181c; }
-  .recibo-total { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--font-display); font-weight: 800; font-size: 15px; padding-top: 10px; margin-top: 8px; border-top: 2px solid #17181c; }
+  .recibo-total { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-weight: 800; font-size: 15px; padding: 12px 14px; margin-top: 12px; border-radius: 10px; background: #D7F6F3; color: #0C6B63; }
   .recibo-footer { margin-top: 16px; font-size: 9.5px; color: #9a9ca3; text-align: center; line-height: 1.5; }
 
   .field { margin-bottom: 11px; }
@@ -306,6 +350,7 @@
   .hint { font-size: 11px; color: var(--fg-muted); margin-top: 3px; }
 
   .rec-dias-lista { display: flex; flex-direction: column; gap: 6px; }
+  .rec-dias-lista.rec-dias-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
   .rec-dia-linha { display: flex; align-items: center; gap: 8px; }
   .dia-chip-toggle {
     display: inline-flex; align-items: center; justify-content: center; gap: 4px;
@@ -731,11 +776,6 @@
   /* carrossel da Visão mensal: só aparece no mobile (ver breakpoint); no desktop/tablet a tabela já cobre o caso */
   .visao-mensal-carrossel { display:none; }
 
-  /* modal "Nova cobrança": centralizado por padrão (desktop/tablet) */
-  .modal-overlay.fin-cobranca-modal { align-items:center; justify-content:center; padding:20px; }
-  .fin-cobranca-sheet { background: var(--surface); width:100%; max-width:420px; max-height:88vh; overflow-y:auto; border-radius:18px; padding:20px; }
-  .fin-cobranca-sheet .modal-handle { display:none; }
-
   /* ---------- responsivo ---------- */
   @media (max-width: 1140px){
     .dash-grid { grid-template-columns: 1fr; }
@@ -836,11 +876,25 @@
     .vmc-linha-valor.ok { color: var(--success); }
     .vmc-linha-valor.warn { color: var(--warning); }
 
-    /* modal "Nova cobrança" volta a ser painel inferior no mobile */
-    .modal-overlay.fin-cobranca-modal { align-items:flex-end; justify-content:stretch; padding:0; }
-    .fin-cobranca-sheet {
-      max-width:none; border-radius:18px 18px 0 0;
-      padding:16px max(16px, env(safe-area-inset-left,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
+    /* modais "sheet" (Editar/Novo aluno, Cobrar aluno, Nova cobrança): painel inferior no mobile,
+       centralizados em desktop/tablet (ver regras-base de .modal-overlay/.modal-sheet acima) */
+    .modal-overlay { align-items: flex-end; justify-content: stretch; padding: 0; }
+    .modal-sheet, .modal-sheet.lg {
+      max-width: none; border-radius: 18px 18px 0 0;
+      padding: 16px max(16px, env(safe-area-inset-left,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
     }
-    .fin-cobranca-sheet .modal-handle { display:block; }
+    .modal-handle { display: block; }
+    .rec-dias-lista.rec-dias-grid { grid-template-columns: 1fr; }
+    .field-row.cols-3 { grid-template-columns: 1fr; }
+
+    /* modal-dialog/modal-document (confirmação, recibo) continuam centralizados mesmo no mobile */
+    .modal-overlay.center { align-items: center; justify-content: center; padding: 20px; }
+
+    /* "Nova aula" é a exceção entre os modais centralizados: vira painel inferior compacto no mobile */
+    .modal-overlay.aula-modal { align-items: flex-end; justify-content: stretch; padding: 0; }
+    .aula-modal-dialog {
+      max-width: none; border-radius: 18px 18px 0 0;
+      padding: 18px max(18px, env(safe-area-inset-left,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px, env(safe-area-inset-right,0px));
+    }
+    .aula-modal-dialog .modal-handle { display: block; }
   }

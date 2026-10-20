@@ -366,65 +366,79 @@
 
 <!-- MODAL ALUNO -->
 <div class="modal-overlay" id="modal-aluno">
-  <div class="modal-sheet">
+  <div class="modal-sheet lg">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="modal-aluno-titulo">Novo aluno</div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-aluno-titulo">Novo aluno</div>
+        <div class="modal-subtitle" id="modal-aluno-subtitulo">Preencha os dados para cadastrar o aluno.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharModal('modal-aluno')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
     <form id="form-aluno" onsubmit="salvarAluno(event)">
-      <div class="field">
-        <label for="f-nome">Nome</label>
-        <input id="f-nome" required placeholder="Nome completo">
-      </div>
-      <div class="field-row">
+      <div class="modal-section">
+        <div class="modal-section-title"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="currentColor" stroke-width="2"/><path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Dados pessoais</div>
         <div class="field">
-          <label for="f-telefone">Telefone</label>
-          <input id="f-telefone" required placeholder="11 98888-7777" inputmode="tel">
+          <label for="f-nome">Nome</label>
+          <input id="f-nome" required placeholder="Nome completo">
+        </div>
+        <div class="field-row cols-3">
+          <div class="field">
+            <label for="f-telefone">Telefone</label>
+            <input id="f-telefone" required placeholder="11 98888-7777" inputmode="tel">
+          </div>
+          <div class="field">
+            <label for="f-sexo">Sexo</label>
+            <select id="f-sexo">
+              <option value="F">Feminino</option>
+              <option value="M">Masculino</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-nascimento">Data de nascimento</label>
+            <input id="f-nascimento" type="date" required oninput="atualizarIdadePreview()">
+            <div class="hint" id="idade-preview"></div>
+          </div>
         </div>
         <div class="field">
-          <label for="f-sexo">Sexo</label>
-          <select id="f-sexo">
-            <option value="F">Feminino</option>
-            <option value="M">Masculino</option>
-            <option value="Outro">Outro</option>
-          </select>
+          <label for="f-endereco">Endereço completo</label>
+          <input id="f-endereco" required placeholder="Rua, número, bairro, cidade">
+          <div class="hint">Usado para abrir a rota no Maps/Waze a partir da sua localização.</div>
         </div>
       </div>
-      <div class="field">
-        <label for="f-nascimento">Data de nascimento</label>
-        <input id="f-nascimento" type="date" required oninput="atualizarIdadePreview()">
-        <div class="hint" id="idade-preview"></div>
+      <div class="modal-section">
+        <div class="modal-section-title"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 6.5c0-1.93-2.24-3.5-5-3.5s-5 1.57-5 3.5S9.24 10 12 10s5 1.57 5 3.5S14.76 17 12 17s-5-1.57-5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Configuração financeira</div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-plano-tipo">Ciclo de cobrança</label>
+            <select id="f-plano-tipo" onchange="atualizarCamposPlano()">
+              <option value="mensal">Mensal</option>
+              <option value="semanal">Semanal</option>
+              <option value="avulsa">Por aula (na hora)</option>
+            </select>
+          </div>
+          <div class="field" id="campo-cobranca">
+            <label for="f-plano-cobranca">Base de cálculo</label>
+            <select id="f-plano-cobranca" onchange="atualizarCamposPlano()">
+              <option value="fixa">Valor fixo no período</option>
+              <option value="por_aula">Valor por aula dada</option>
+            </select>
+          </div>
+        </div>
+        <div class="hint" style="margin:-4px 0 11px;">"Valor fixo" cobra o mesmo valor todo período. "Por aula dada" soma as aulas concluídas no período.</div>
+        <div class="field" id="campo-valor-fixo">
+          <label for="f-plano-valor-fixo">Valor fixo do período (R$)</label>
+          <input id="f-plano-valor-fixo" type="number" min="0" step="0.01" placeholder="Ex: 640,00">
+        </div>
+        <div class="field" id="campo-valor-aula">
+          <label for="f-plano-valor-aula">Valor por aula (R$)</label>
+          <input id="f-plano-valor-aula" type="number" min="0" step="0.01" placeholder="Ex: 110,00">
+        </div>
       </div>
-      <div class="field">
-        <label for="f-endereco">Endereço completo</label>
-        <input id="f-endereco" required placeholder="Rua, número, bairro, cidade">
-        <div class="hint">Usado para abrir a rota no Maps/Waze a partir da sua localização.</div>
-      </div>
-      <div class="field">
-        <label for="f-plano-tipo">Ciclo de cobrança</label>
-        <select id="f-plano-tipo" onchange="atualizarCamposPlano()">
-          <option value="mensal">Mensal</option>
-          <option value="semanal">Semanal</option>
-          <option value="avulsa">Por aula (na hora)</option>
-        </select>
-      </div>
-      <div class="field" id="campo-cobranca">
-        <label for="f-plano-cobranca">Base de cálculo</label>
-        <select id="f-plano-cobranca" onchange="atualizarCamposPlano()">
-          <option value="fixa">Valor fixo no período</option>
-          <option value="por_aula">Valor por aula dada</option>
-        </select>
-        <div class="hint">"Valor fixo" cobra o mesmo valor todo período. "Por aula dada" soma as aulas concluídas no período.</div>
-      </div>
-      <div class="field" id="campo-valor-fixo">
-        <label for="f-plano-valor-fixo">Valor fixo do período (R$)</label>
-        <input id="f-plano-valor-fixo" type="number" min="0" step="0.01" placeholder="Ex: 640,00">
-      </div>
-      <div class="field" id="campo-valor-aula">
-        <label for="f-plano-valor-aula">Valor por aula (R$)</label>
-        <input id="f-plano-valor-aula" type="number" min="0" step="0.01" placeholder="Ex: 110,00">
-      </div>
-      <div class="field">
-        <label>Dias e horários fixos (recorrência)</label>
-        <div class="rec-dias-lista" id="rec-dias-lista">
+      <div class="modal-section">
+        <div class="modal-section-title"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Dias e horários fixos</div>
+        <div class="rec-dias-lista rec-dias-grid" id="rec-dias-lista">
           <div class="rec-dia-linha" data-dia="0">
             <label class="dia-chip-toggle"><input type="checkbox" class="rec-dia-check" value="0" onchange="toggleRecDia(this)"><span>Dom</span></label>
             <input type="time" class="rec-dia-horario" disabled>
@@ -458,30 +472,41 @@
       </div>
       <div class="action-row">
         <button type="button" class="btn block" onclick="fecharModal('modal-aluno')">Cancelar</button>
-        <button type="submit" class="btn primary block">Salvar aluno</button>
+        <button type="submit" class="btn primary block" id="modal-aluno-submit">Salvar aluno</button>
       </div>
     </form>
   </div>
 </div>
 
 <!-- MODAL AULA -->
-<div class="modal-overlay center" id="modal-aula">
-  <div class="modal-dialog">
-    <div class="modal-title" id="modal-aula-titulo">Nova aula</div>
+<div class="modal-overlay center aula-modal" id="modal-aula">
+  <div class="modal-dialog aula-modal-dialog">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-aula-titulo">Nova aula</div>
+        <div class="modal-subtitle">Agende uma nova aula na agenda.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharModal('modal-aula')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
     <form id="form-aula" onsubmit="salvarAula(event)">
       <div class="field">
         <label for="fa-aluno">Aluno</label>
-        <select id="fa-aluno" required></select>
+        <select id="fa-aluno" required onchange="atualizarResumoAula()"></select>
       </div>
       <div class="field-row">
         <div class="field">
           <label for="fa-data">Data</label>
-          <input id="fa-data" type="date" required>
+          <input id="fa-data" type="date" required oninput="atualizarResumoAula()">
         </div>
         <div class="field">
           <label for="fa-hora">Horário</label>
-          <input id="fa-hora" type="time" required>
+          <input id="fa-hora" type="time" required oninput="atualizarResumoAula()">
         </div>
+      </div>
+      <div class="aula-resumo">
+        <div class="aula-resumo-titulo"><svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Resumo da aula</div>
+        <div id="aula-resumo-conteudo"></div>
       </div>
       <div class="action-row">
         <button type="button" class="btn block" onclick="fecharModal('modal-aula')">Cancelar</button>
@@ -508,8 +533,8 @@
 </div>
 
 <!-- MODAL NOVA COBRANÇA RÁPIDA (Financeiro): centralizado em desktop/tablet, painel inferior no mobile -->
-<div class="modal-overlay fin-cobranca-modal" id="modal-fin-cobranca-rapida">
-  <div class="fin-cobranca-sheet">
+<div class="modal-overlay" id="modal-fin-cobranca-rapida">
+  <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-title">Nova cobrança</div>
     <div class="hint" style="margin-bottom:10px;">Gera a cobrança do período atual para o aluno escolhido, seguindo as mesmas regras já usadas na ficha do aluno.</div>
@@ -539,6 +564,7 @@
 <!-- MODAL RECIBO -->
 <div class="modal-overlay center" id="modal-recibo">
   <div class="modal-document">
+    <button type="button" class="modal-close modal-document-close" onclick="fecharModal('modal-recibo')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <div id="recibo-conteudo"></div>
     <div class="action-row">
       <button class="btn" onclick="fecharModal('modal-recibo')">Fechar</button>
