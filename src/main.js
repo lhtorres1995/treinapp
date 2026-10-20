@@ -18,7 +18,8 @@ import './styles.css';
     print: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9V2h12v7M6 18H4a1 1 0 01-1-1v-6a1 1 0 011-1h16a1 1 0 011 1v6a1 1 0 01-1 1h-2M6 14h12v8H6v-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>',
     clock: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    x: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    x: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L2 20h20L12 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
   };
   var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   var MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -1639,9 +1640,12 @@ import './styles.css';
     return MESES_ABREV[Number(partes[1])-1] + "/" + partes[0];
   }
 
-  function calcularPrevistoMes(mesStr){
+  // alunoId é opcional em todas as três funções abaixo: quando omitido, mantém exatamente o
+  // comportamento original (todos os alunos). Passá-lo apenas restringe a MESMA regra de cálculo
+  // a um único aluno — nenhuma fórmula financeira foi alterada.
+  function calcularPrevistoMes(mesStr, alunoId){
     var total = 0;
-    state.alunos.filter(function(a){ return a.ativo; }).forEach(function(aluno){
+    state.alunos.filter(function(a){ return a.ativo && (!alunoId || alunoId==="todos" || a.id===alunoId); }).forEach(function(aluno){
       var aulasDoAlunoNoMes = state.aulas.filter(function(c){
         return c.alunoId===aluno.id && c.data.slice(0,7)===mesStr && c.status!=="cancelada" && c.status!=="remarcada";
       });
@@ -1663,94 +1667,327 @@ import './styles.css';
     return total;
   }
 
-  function calcularRecebidoMes(mesStr){
+  function calcularRecebidoMes(mesStr, alunoId){
     return state.pagamentos.filter(function(p){
-      return p.status==="pago" && p.dataPagamento && p.dataPagamento.slice(0,7)===mesStr;
+      return p.status==="pago" && p.dataPagamento && p.dataPagamento.slice(0,7)===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
     }).reduce(function(s,p){ return s+p.valor; }, 0);
   }
 
-  function calcularPendenteMes(mesStr){
+  function calcularPendenteMes(mesStr, alunoId){
     return state.pagamentos.filter(function(p){
-      return p.status==="pendente" && p.mesReferencia===mesStr;
+      return p.status==="pendente" && p.mesReferencia===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
     }).reduce(function(s,p){ return s+p.valor; }, 0);
+  }
+
+  // mês "dono" de um pagamento, para agrupar pendentes e pagos sob o mesmo critério de período
+  function financeiroMesDoPagamento(p){
+    if (p.status==="pago") return (p.dataPagamento||"").slice(0,7);
+    return p.mesReferencia || (p.dataVencimento||"").slice(0,7);
   }
 
   function renderVisaoMensal(){
-    var mesAtualStr = fmtData(hoje).slice(0,7);
-    var meses = [];
-    for (var i=-2; i<=2; i++){
-      meses.push(fmtData(new Date(hoje.getFullYear(), hoje.getMonth()+i, 1)).slice(0,7));
-    }
+    // acompanha a navegação do Financeiro: 2 meses antes e 2 depois do mês
+    // selecionado (finMesCursor), destacando o mês selecionado e respeitando
+    // o filtro de aluno (mesmas funções de cálculo já usadas no resto da tela).
+    var mesesRef = [];
+    for (var i=-2; i<=2; i++){ mesesRef.push(finSomarMes(finMesCursor, i)); }
+    var alunoId = finAlunoFiltro;
     var linhas = [
       {label:"Previsto", calc:calcularPrevistoMes, cor:""},
       {label:"Recebido", calc:calcularRecebidoMes, cor:"ok"},
       {label:"A receber", calc:calcularPendenteMes, cor:"warn"}
     ];
+
+    // ---- tabela (desktop/tablet) ----
     var html = '<div class="tabela-mensal-wrap"><table class="tabela-mensal"><thead><tr><th></th>';
-    meses.forEach(function(m){
-      html += '<th class="'+(m===mesAtualStr?'atual':'')+'">'+mesLabel(m)+'</th>';
+    mesesRef.forEach(function(m){
+      html += '<th class="'+(m===finMesCursor?'atual':'')+'">'+mesLabel(m)+'</th>';
     });
     html += '</tr></thead><tbody>';
     linhas.forEach(function(linha){
       html += '<tr><td class="tabela-mensal-label">'+linha.label+'</td>';
-      meses.forEach(function(m){
-        html += '<td class="'+(m===mesAtualStr?'atual ':'')+linha.cor+'">'+fmtMoeda(linha.calc(m))+'</td>';
+      mesesRef.forEach(function(m){
+        html += '<td class="'+(m===finMesCursor?'atual ':'')+linha.cor+'">'+fmtMoeda(linha.calc(m, alunoId))+'</td>';
       });
       html += '</tr>';
     });
     html += '</tbody></table></div>';
-    document.getElementById("fin-visao-mensal").innerHTML = html;
-  }
 
-  var financeiroFiltro = "todos";
-  window.mudarFiltroFinanceiro = function(f){
-    financeiroFiltro = f;
-    document.querySelectorAll("#fin-filtro-toggle .seg-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.filtro===f); });
-    renderFinanceiro();
-  };
+    // ---- carrossel com snap (mobile): um cartão por mês, com indicação visual
+    // de que há mais meses para os lados (cartão ocupa ~78% da largura, deixando
+    // o próximo/anterior visível na borda) ----
+    var carrossel = '<div class="visao-mensal-carrossel" id="visao-mensal-carrossel">' + mesesRef.map(function(m){
+      var selecionado = m===finMesCursor;
+      var linhasHtml = linhas.map(function(linha){
+        return '<div class="vmc-linha"><span class="vmc-linha-label">'+linha.label+'</span><span class="vmc-linha-valor '+linha.cor+'">'+fmtMoeda(linha.calc(m, alunoId))+'</span></div>';
+      }).join("");
+      return '<div class="vmc-card'+(selecionado?' sel':'')+'" data-mes="'+m+'"><div class="vmc-mes">'+mesLabel(m)+(selecionado?' <span class="vmc-tag">selecionado</span>':'')+'</div>'+linhasHtml+'</div>';
+    }).join("") + '</div>';
+
+    document.getElementById("fin-visao-mensal").innerHTML = html + carrossel;
+
+    var cardSelecionado = document.querySelector("#visao-mensal-carrossel .vmc-card.sel");
+    if (cardSelecionado) cardSelecionado.scrollIntoView({ inline:"center", block:"nearest" });
+  }
 
   function ehVencido(p){
     return p.status==="pendente" && p.dataVencimento && p.dataVencimento < fmtData(hoje);
   }
 
-  function renderFinanceiro(){
-    var hojeStr = fmtData(hoje);
-    var todosPendentes = state.pagamentos.filter(function(p){return p.status==="pendente";});
-    var vencidos = todosPendentes.filter(ehVencido);
-    var pendentesExibidos = financeiroFiltro==="vencidos" ? vencidos : todosPendentes;
-    pendentesExibidos = pendentesExibidos.slice().sort(function(a,b){
-      return (a.dataVencimento||"") < (b.dataVencimento||"") ? -1 : 1;
+  // mês "dono" de um pagamento, para agrupar pendentes e pagos sob o mesmo critério de período
+  // (definida acima de calcularPendenteMes; mantida aqui também por clareza de uso no filtro da tabela)
+
+  // ---------- estado de navegação/filtros do Financeiro ----------
+  var finMesCursor = fmtData(hoje).slice(0,7); // "YYYY-MM"
+  var finAlunoFiltro = "todos";
+  var finAba = "todas"; // todas | abertas | vencidas | recebidas
+  var finBusca = "";
+  var finPagina = 1;
+  var FIN_POR_PAGINA = 8;
+
+  function finSomarMes(mesStr, delta){
+    var d = new Date(mesStr+"-01T00:00:00");
+    d = new Date(d.getFullYear(), d.getMonth()+delta, 1);
+    return fmtData(d).slice(0,7);
+  }
+
+  function finDeltaPct(atual, anterior){
+    if (!anterior) return null;
+    return ((atual-anterior)/anterior)*100;
+  }
+
+  window.mudarMesFinanceiro = function(delta){
+    finMesCursor = finSomarMes(finMesCursor, delta);
+    finPagina = 1;
+    renderFinanceiro();
+  };
+
+  window.mudarAlunoFinanceiro = function(valor){
+    finAlunoFiltro = valor;
+    finPagina = 1;
+    renderFinanceiro();
+  };
+
+  window.mudarAbaFinanceiro = function(aba){
+    finAba = aba;
+    finPagina = 1;
+    renderFinanceiro();
+  };
+
+  window.filtrarFinanceiro = function(valor){
+    finBusca = (valor||"").toLowerCase();
+    finPagina = 1;
+    renderFinanceiro();
+  };
+
+  window.mudarPaginaFinanceiro = function(delta){
+    finPagina += delta;
+    renderFinanceiro();
+  };
+
+  window.abrirNovaCobrancaRapida = function(){
+    var sel = document.getElementById("fin-cobranca-aluno");
+    var ativos = state.alunos.filter(function(a){ return a.ativo; });
+    sel.innerHTML = ativos.length ? ativos.map(function(a){
+      return '<option value="'+a.id+'">'+a.nome+'</option>';
+    }).join("") : '<option value="">Nenhum aluno ativo</option>';
+    // conveniência: pré-seleciona o aluno atualmente filtrado na tela, sem
+    // restringir a lista — o personal continua podendo escolher qualquer outro ativo.
+    if (finAlunoFiltro !== "todos" && ativos.some(function(a){ return a.id===finAlunoFiltro; })){
+      sel.value = finAlunoFiltro;
+    }
+    abrirModal("modal-fin-cobranca-rapida");
+  };
+
+  window.confirmarNovaCobrancaRapida = function(){
+    var alunoId = document.getElementById("fin-cobranca-aluno").value;
+    if (!alunoId) return;
+    fecharModal("modal-fin-cobranca-rapida");
+    gerarCobranca(alunoId);
+  };
+
+  window.abrirRegistrarRecebimento = function(){
+    finAba = "abertas";
+    finPagina = 1;
+    renderFinanceiro();
+    var wrap = document.getElementById("fin-tabela-wrap");
+    if (wrap) wrap.scrollIntoView({ behavior:"smooth", block:"start" });
+  };
+
+  function finIndicadores(){
+    var mesAnterior = finSomarMes(finMesCursor, -1);
+    var recebidoMes = calcularRecebidoMes(finMesCursor, finAlunoFiltro);
+    var recebidoAnt = calcularRecebidoMes(mesAnterior, finAlunoFiltro);
+    var previstoMes = calcularPrevistoMes(finMesCursor, finAlunoFiltro);
+    var previstoAnt = calcularPrevistoMes(mesAnterior, finAlunoFiltro);
+
+    var pendentesTodos = state.pagamentos.filter(function(p){
+      return p.status==="pendente" && (finAlunoFiltro==="todos" || p.alunoId===finAlunoFiltro);
     });
-    var pagos = state.pagamentos.filter(function(p){return p.status==="pago";})
-      .sort(function(a,b){ return a.dataPagamento < b.dataPagamento ? 1 : -1; });
+    var emAberto = pendentesTodos.reduce(function(s,p){ return s+p.valor; }, 0);
+    var vencido = pendentesTodos.filter(ehVencido).reduce(function(s,p){ return s+p.valor; }, 0);
 
-    var mesAtual = hojeStr.slice(0,7);
-    var totalReceber = todosPendentes.reduce(function(s,p){return s+p.valor;},0);
-    var totalVencidos = vencidos.reduce(function(s,p){return s+p.valor;},0);
-    var totalMes = pagos.filter(function(p){return p.dataPagamento.slice(0,7)===mesAtual;}).reduce(function(s,p){return s+p.valor;},0);
-    document.getElementById("fin-total-receber").textContent = fmtMoeda(totalReceber);
-    document.getElementById("fin-total-vencidos").textContent = fmtMoeda(totalVencidos);
-    document.getElementById("fin-total-mes").textContent = fmtMoeda(totalMes);
+    function deltaTxt(atual, anterior){
+      var d = finDeltaPct(atual, anterior);
+      if (d===null) return null;
+      var cls = d>=0 ? "" : " down";
+      var sinal = d>=0 ? "+" : "";
+      return '<span class="dash-stat-delta'+cls+'">'+sinal+d.toFixed(0)+'% vs. mês anterior</span>';
+    }
 
-    document.getElementById("fin-pendentes").innerHTML = pendentesExibidos.length ? pendentesExibidos.map(function(p){
+    return [
+      { ic: ICONS.cash, cor:"teal", label:"Recebido no mês", valor: recebidoMes, delta: deltaTxt(recebidoMes, recebidoAnt) },
+      { ic: ICONS.clock, cor:"violet", label:"Previsto no mês", valor: previstoMes, delta: deltaTxt(previstoMes, previstoAnt) },
+      { ic: ICONS.alert, cor:"amber", label:"Em aberto (acumulado)", valor: emAberto, delta: null },
+      { ic: ICONS.alert, cor:"danger", label:"Vencido (acumulado)", valor: vencido, delta: null }
+    ];
+  }
+
+  function renderFinanceiroIndicadores(){
+    var itens = finIndicadores();
+    document.getElementById("fin-indicadores").innerHTML = itens.map(function(it){
+      return '<div class="dash-stat kpi"><div class="kpi-top"><div class="dash-stat-ic '+it.cor+'">'+it.ic+'</div>'
+        + (it.delta||'') + '</div>'
+        + '<div><div class="dash-stat-val">'+fmtMoeda(it.valor)+'</div><div class="dash-stat-lab">'+it.label+'</div></div></div>';
+    }).join("");
+  }
+
+  function renderFinanceiroGrafico(){
+    var meses = [];
+    for (var i=-5; i<=0; i++){ meses.push(finSomarMes(finMesCursor, i)); }
+    var dados = meses.map(function(m){
+      return { m:m, prev:calcularPrevistoMes(m, finAlunoFiltro), receb:calcularRecebidoMes(m, finAlunoFiltro), aberto:calcularPendenteMes(m, finAlunoFiltro) };
+    });
+    var max = 1;
+    dados.forEach(function(d){ max = Math.max(max, d.prev, d.receb, d.aberto); });
+    function barra(cls, val){ var hpx = Math.round(val/max*112); return '<div class="chart-bar '+cls+'" style="height:'+hpx+'px"></div>'; }
+    var cols = dados.map(function(d){
+      return '<div class="chart-col"><div class="chart-bars">'+barra("prev",d.prev)+barra("receb",d.receb)+barra("aberto",d.aberto)+'</div>'
+        + '<div class="chart-xlab">'+mesLabel(d.m).split("/")[0]+'</div></div>';
+    }).join("");
+    var legenda = '<div class="chart-legend">'
+      + '<span><i class="chart-dot" style="background:#CBD1DA"></i>Previsto</span>'
+      + '<span><i class="chart-dot" style="background:var(--accent)"></i>Recebido</span>'
+      + '<span><i class="chart-dot" style="background:var(--warning)"></i>Em aberto</span></div>';
+    document.getElementById("fin-grafico").innerHTML = '<div class="chart-fin">'+cols+'</div>'+legenda;
+  }
+
+  function finPagamentosFiltrados(){
+    var busca = finBusca;
+    return state.pagamentos.filter(function(p){
+      if (finAlunoFiltro!=="todos" && p.alunoId!==finAlunoFiltro) return false;
+      if (financeiroMesDoPagamento(p) !== finMesCursor) return false;
+      if (finAba==="abertas" && !(p.status==="pendente" && !ehVencido(p))) return false;
+      if (finAba==="vencidas" && !(p.status==="pendente" && ehVencido(p))) return false;
+      if (finAba==="recebidas" && p.status!=="pago") return false;
+      if (busca){
+        var aluno = getAluno(p.alunoId);
+        var alvo = ((aluno?aluno.nome:"") + " " + p.referencia + " " + fmtMoeda(p.valor)).toLowerCase();
+        if (alvo.indexOf(busca)===-1) return false;
+      }
+      return true;
+    }).sort(function(a,b){
+      var da = a.dataVencimento || a.dataPagamento || "";
+      var db = b.dataVencimento || b.dataPagamento || "";
+      return da < db ? -1 : 1;
+    });
+  }
+
+  function finStatusBadge(p){
+    if (p.status==="pago") return '<span class="badge ok">recebido</span>';
+    if (ehVencido(p)) return '<span class="badge danger">vencido</span>';
+    return '<span class="badge warn">em aberto</span>';
+  }
+
+  function finAcoesRow(p){
+    var acoes = '<button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' Recibo</button>';
+    if (p.status==="pendente"){
+      acoes += '<button class="btn sm" onclick="abrirCobranca(\''+p.id+'\')">'+ICONS.whats+' Cobrar</button>'
+        + '<button class="btn sm primary" onclick="marcarPago(\''+p.id+'\')">'+ICONS.check+' Marcar pago</button>';
+    }
+    return '<div class="action-row">'+acoes+'</div>';
+  }
+
+  function renderFinanceiroTabela(){
+    var todos = finPagamentosFiltrados();
+    var totalPaginas = Math.max(1, Math.ceil(todos.length / FIN_POR_PAGINA));
+    if (finPagina > totalPaginas) finPagina = totalPaginas;
+    if (finPagina < 1) finPagina = 1;
+    var inicio = (finPagina-1) * FIN_POR_PAGINA;
+    var pagina = todos.slice(inicio, inicio + FIN_POR_PAGINA);
+
+    document.querySelectorAll("#fin-abas-toggle .seg-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.aba===finAba); });
+
+    if (pagina.length===0){
+      var vazio = '<div class="empty-state"><div class="display">Nenhuma cobrança encontrada</div></div>';
+      document.getElementById("fin-tabela-body").innerHTML = '<tr><td colspan="6">'+vazio+'</td></tr>';
+      document.getElementById("fin-cards").innerHTML = vazio;
+    } else {
+      document.getElementById("fin-tabela-body").innerHTML = pagina.map(function(p){
+        var aluno = getAluno(p.alunoId);
+        var venc = p.dataVencimento ? fmtDataBR(p.dataVencimento) : "—";
+        return '<tr><td>'+venc+'</td><td>'+(aluno?aluno.nome:"—")+'</td><td>'+p.referencia+'</td><td>'+fmtMoeda(p.valor)+'</td><td>'+finStatusBadge(p)+'</td><td>'+finAcoesRow(p)+'</td></tr>';
+      }).join("");
+
+      document.getElementById("fin-cards").innerHTML = pagina.map(function(p){
+        var aluno = getAluno(p.alunoId);
+        // o valor fica em destaque à direita (não mais dentro do texto truncável do
+        // subtítulo), para não ser cortado pelo "..." junto com a data de vencimento.
+        var subLabel = p.referencia + (p.dataVencimento ? (' · vence ' + fmtDataBR(p.dataVencimento)) : '');
+        return '<div class="card fin-card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">'+subLabel+'</div></div>'
+          + '<div class="fin-card-right"><div class="fin-card-valor">'+fmtMoeda(p.valor)+'</div>'+finStatusBadge(p)+'</div></div>'+finAcoesRow(p)+'</div>';
+      }).join("");
+    }
+
+    document.getElementById("fin-paginacao").innerHTML = totalPaginas<=1 ? '' :
+      '<button class="btn sm" onclick="mudarPaginaFinanceiro(-1)" '+(finPagina<=1?'disabled':'')+'>'+ICONS.chevL+'</button>'
+      + '<span class="fin-pagina-label">Página '+finPagina+' de '+totalPaginas+'</span>'
+      + '<button class="btn sm" onclick="mudarPaginaFinanceiro(1)" '+(finPagina>=totalPaginas?'disabled':'')+'>'+ICONS.chevD+'</button>';
+  }
+
+  function renderFinanceiroRail(){
+    var hojeStr = fmtData(hoje);
+    var proximos = state.pagamentos.filter(function(p){
+      return p.status==="pendente" && !ehVencido(p) && (finAlunoFiltro==="todos" || p.alunoId===finAlunoFiltro);
+    }).sort(function(a,b){ return (a.dataVencimento||"") < (b.dataVencimento||"") ? -1 : 1; }).slice(0,5);
+
+    var recentes = state.pagamentos.filter(function(p){
+      return p.status==="pago" && (finAlunoFiltro==="todos" || p.alunoId===finAlunoFiltro);
+    }).sort(function(a,b){ return a.dataPagamento < b.dataPagamento ? 1 : -1; }).slice(0,5);
+
+    document.getElementById("fin-proximos").innerHTML = proximos.length ? proximos.map(function(p){
       var aluno = getAluno(p.alunoId);
-      var vencido = ehVencido(p);
-      var subLabel = p.referencia + ' · ' + fmtMoeda(p.valor) + (p.dataVencimento ? (' · vence ' + fmtDataBR(p.dataVencimento)) : '');
-      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+aluno.nome+'</div><div class="card-sub">'+subLabel+'</div></div>'+
-        (vencido ? '<span class="badge danger">vencido</span>' : '<span class="badge warn">pendente</span>')+'</div>'+
-        '<div class="action-row">'+
-        '<button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' Recibo</button>'+
-        '<button class="btn sm" onclick="abrirCobranca(\''+p.id+'\')">'+ICONS.whats+' Cobrar</button>'+
-        '<button class="btn sm primary" onclick="marcarPago(\''+p.id+'\')">'+ICONS.check+' Marcar pago</button>'+
-        '</div></div>';
-    }).join("") : '<div class="empty-state"><div class="display">'+(financeiroFiltro==="vencidos" ? "Nada vencido" : "Nada em aberto")+'</div></div>';
+      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">vence '+fmtDataBR(p.dataVencimento)+'</div></div><span class="badge neutral">'+fmtMoeda(p.valor)+'</span></div></div>';
+    }).join("") : '<div class="empty-state"><div class="display">Nada a vencer</div></div>';
 
-    document.getElementById("fin-pagos").innerHTML = pagos.slice(0,6).map(function(p){
+    document.getElementById("fin-recentes").innerHTML = recentes.length ? recentes.map(function(p){
       var aluno = getAluno(p.alunoId);
-      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+aluno.nome+'</div><div class="card-sub">'+p.referencia+' · '+fmtDataBR(p.dataPagamento)+'</div></div><span class="badge ok">'+fmtMoeda(p.valor)+'</span></div>'+
-        '<div class="action-row"><button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' Ver recibo</button></div></div>';
-    }).join("") || '<div class="empty-state"><div class="display">Sem recebimentos ainda</div></div>';
+      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">'+fmtDataBR(p.dataPagamento)+'</div></div><span class="badge ok">'+fmtMoeda(p.valor)+'</span></div></div>';
+    }).join("") : '<div class="empty-state"><div class="display">Sem recebimentos ainda</div></div>';
 
+    document.getElementById("fin-acoes").innerHTML =
+      '<button class="acao-btn" onclick="abrirNovaCobrancaRapida()"><span class="acao-ic dash-stat-ic teal">'+ICONS.cash+'</span>Nova cobrança</button>'
+      + '<button class="acao-btn" onclick="abrirRegistrarRecebimento()"><span class="acao-ic dash-stat-ic green">'+ICONS.check+'</span>Registrar recebimento</button>'
+      + '<button class="acao-btn" onclick="irParaTab(\'alunos\')"><span class="acao-ic dash-stat-ic violet">'+ICONS.eye+'</span>Ver alunos</button>';
+  }
+
+  function renderFinanceiroSelects(){
+    var selFiltro = document.getElementById("fin-aluno-select");
+    if (selFiltro && selFiltro.options.length <= 1){
+      selFiltro.innerHTML = '<option value="todos">Todos os alunos</option>' + state.alunos.map(function(a){
+        return '<option value="'+a.id+'">'+a.nome+'</option>';
+      }).join("");
+      selFiltro.value = finAlunoFiltro;
+    }
+  }
+
+  function renderFinanceiro(){
+    document.getElementById("fin-mes-label").textContent = mesLabel(finMesCursor);
+    renderFinanceiroSelects();
+    renderFinanceiroIndicadores();
+    renderFinanceiroGrafico();
+    renderFinanceiroTabela();
+    renderFinanceiroRail();
     renderVisaoMensal();
   }
 

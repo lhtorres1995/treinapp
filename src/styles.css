@@ -112,8 +112,8 @@
   .screen { display: none; }
   .screen.active { display: block; }
   /* telas ainda não modernizadas: contém a largura para não esticar no desktop */
-  #screen-financeiro, #screen-perfil { max-width: 820px; }
-  #screen-alunos, #screen-agenda { max-width: 1340px; }
+  #screen-perfil { max-width: 820px; }
+  #screen-alunos, #screen-agenda, #screen-financeiro { max-width: 1340px; }
 
   .section-title {
     font-size: 12px;
@@ -572,6 +572,7 @@
   .dash-stat.kpi { flex-direction:column; align-items:flex-start; gap:10px; }
   .dash-stat.kpi .kpi-top { display:flex; align-items:center; justify-content:space-between; width:100%; }
   .dash-stat-delta { font-size:11px; font-weight:700; color: var(--accent); white-space:nowrap; flex:none; }
+  .dash-stat-delta.down { color: var(--danger); }
 
   .alunos-toolbar { display:flex; gap:10px; align-items:center; margin:18px 0 16px; flex-wrap:wrap; }
   .alunos-toolbar .alunos-busca { flex:1 1 260px; margin-bottom:0; }
@@ -707,6 +708,34 @@
   .dia-pill.ativo .dia-pill-dow, .dia-pill.ativo .dia-pill-num { color:#fff; }
   .dia-pill.ativo .dia-pill-dot { background:#fff; }
 
+  /* ================= FINANCEIRO LT360 ================= */
+  .fin-mes-nav { max-width:260px; margin-bottom:0; }
+  .fin-mes-nav .day-label { flex:none; min-width:140px; }
+  .fin-aluno-select { flex:none; }
+
+  .fin-abas-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px; }
+  .fin-abas { margin-bottom:0; max-width:460px; background: var(--surface); border:1px solid var(--border); padding:4px; border-radius:12px; gap:2px; flex:1 1 320px; }
+  .fin-abas .seg-btn { padding:8px 4px; border-radius:9px; font-size:12.5px; font-weight:700; color: var(--fg-muted); transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+  .fin-abas .seg-btn.active { background: var(--accent); color: var(--accent-fg); box-shadow: 0 2px 6px rgba(0,181,169,.28); }
+  .fin-abas .seg-btn:not(.active):hover { color: var(--fg); background: var(--surface-alt); }
+  .fin-abas-row .fin-busca { flex:1 1 220px; margin-bottom:0; }
+
+  .fin-paginacao { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px; }
+  .fin-pagina-label { font-size:12px; color: var(--fg-muted); font-weight:600; }
+  .fin-paginacao .btn[disabled] { opacity:.4; cursor:default; }
+
+  /* valor em destaque nos cards de cobrança (mobile) — ver .alunos-cards no breakpoint abaixo */
+  .fin-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:none; }
+  .fin-card-valor { font-family: var(--font-display); font-weight:800; font-size:14.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  /* carrossel da Visão mensal: só aparece no mobile (ver breakpoint); no desktop/tablet a tabela já cobre o caso */
+  .visao-mensal-carrossel { display:none; }
+
+  /* modal "Nova cobrança": centralizado por padrão (desktop/tablet) */
+  .modal-overlay.fin-cobranca-modal { align-items:center; justify-content:center; padding:20px; }
+  .fin-cobranca-sheet { background: var(--surface); width:100%; max-width:420px; max-height:88vh; overflow-y:auto; border-radius:18px; padding:20px; }
+  .fin-cobranca-sheet .modal-handle { display:none; }
+
   /* ---------- responsivo ---------- */
   @media (max-width: 1140px){
     .dash-grid { grid-template-columns: 1fr; }
@@ -768,4 +797,50 @@
     .agenda-grid .dash-rail > * { flex:auto; }
     #screen-agenda .search-input { padding:12px 14px; font-size:14px; }
     #screen-agenda .card-sub { font-size:12.5px; }
+
+    /* Financeiro mobile */
+    #fin-toolbar { flex-direction:column; align-items:stretch; }
+    .fin-mes-nav { max-width:none; width:100%; justify-content:space-between; }
+    .fin-aluno-select { width:100%; padding:12px 14px; font-size:13.5px; }
+    .fin-abas-row { flex-direction:column; align-items:stretch; }
+    .fin-abas { max-width:none; width:100%; flex:none; }
+    .fin-abas .seg-btn { padding:9px 2px; font-size:11.5px; }
+    .fin-abas-row .fin-busca { flex:none; padding:12px 14px; font-size:14px; }
+    #screen-financeiro .card-sub { font-size:12.5px; }
+    .fin-grid .dash-rail { flex-direction:column; }
+    .fin-grid .dash-rail > * { flex:auto; }
+    /* o texto "vs. mês anterior" é mais longo que os deltas usuais (ex.: "+12%");
+       no grid 2x2 mobile precisa quebrar linha em vez de vazar para fora do card. */
+    .fin-indicadores .kpi-top { align-items:flex-start; }
+    .fin-indicadores .dash-stat-delta { white-space:normal; text-align:right; font-size:9.5px; line-height:1.2; max-width:68px; }
+
+    /* Visão mensal: troca a tabela (rolagem horizontal "escondida") por um carrossel
+       com snap, mostrando um mês por cartão. O próximo/anterior aparece parcialmente
+       na borda (cartão com ~78% da largura) para deixar claro que dá para arrastar. */
+    .tabela-mensal-wrap { display:none; }
+    .visao-mensal-carrossel {
+      display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory;
+      padding:4px 2px 6px; margin-bottom:4px; -webkit-overflow-scrolling:touch;
+      scroll-padding-inline:11%;
+    }
+    .vmc-card {
+      scroll-snap-align:center; flex:0 0 78%; background: var(--surface); border:1px solid var(--border);
+      border-radius:14px; padding:12px 14px;
+    }
+    .vmc-card.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) inset; }
+    .vmc-mes { font-family: var(--font-display); font-weight:800; font-size:13.5px; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+    .vmc-tag { font-family: var(--font-body); font-weight:700; font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color: var(--accent); background: var(--accent-soft); padding:2px 7px; border-radius:999px; }
+    .vmc-linha { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; color: var(--fg-muted); padding:5px 0; border-bottom:1px solid var(--border); }
+    .vmc-linha:last-child { border-bottom:none; }
+    .vmc-linha-valor { font-weight:700; font-variant-numeric:tabular-nums; color: var(--fg); }
+    .vmc-linha-valor.ok { color: var(--success); }
+    .vmc-linha-valor.warn { color: var(--warning); }
+
+    /* modal "Nova cobrança" volta a ser painel inferior no mobile */
+    .modal-overlay.fin-cobranca-modal { align-items:flex-end; justify-content:stretch; padding:0; }
+    .fin-cobranca-sheet {
+      max-width:none; border-radius:18px 18px 0 0;
+      padding:16px max(16px, env(safe-area-inset-left,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-right,0px));
+    }
+    .fin-cobranca-sheet .modal-handle { display:block; }
   }
