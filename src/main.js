@@ -142,6 +142,7 @@ import './styles.css';
       nascimento: a.nascimento || null, endereco: a.endereco || null,
       plano_tipo: a.plano.tipo, plano_cobranca: a.plano.cobranca,
       valor_fixo: a.plano.valorFixo || 0, valor_aula: a.plano.valorAula || 0,
+      dias_vencimento: (a.plano.diasVencimento===0 || a.plano.diasVencimento) ? a.plano.diasVencimento : null,
       recorrencia_horarios: (a.recorrencia && a.recorrencia.horarios) || {},
       ativo: a.ativo !== false
     };
@@ -150,7 +151,11 @@ import './styles.css';
     return {
       id: r.id, nome: r.nome, telefone: r.telefone, sexo: r.sexo,
       nascimento: r.nascimento, endereco: r.endereco,
-      plano: { tipo: r.plano_tipo, cobranca: r.plano_cobranca, valorFixo: Number(r.valor_fixo)||0, valorAula: Number(r.valor_aula)||0 },
+      plano: {
+        tipo: r.plano_tipo, cobranca: r.plano_cobranca,
+        valorFixo: Number(r.valor_fixo)||0, valorAula: Number(r.valor_aula)||0,
+        diasVencimento: (r.dias_vencimento===0 || r.dias_vencimento) ? Number(r.dias_vencimento) : (r.plano_tipo==="mensal" ? 5 : r.plano_tipo==="semanal" ? 2 : null)
+      },
       recorrencia: { horarios: r.recorrencia_horarios || {} },
       ativo: r.ativo !== false,
       dataCadastro: r.created_at || null
@@ -161,14 +166,16 @@ import './styles.css';
       id: c.id, professor_id: usuarioId, aluno_id: c.alunoId,
       data: c.data, hora: c.hora, status: c.status,
       remarcada_para_id: c.remarcadaParaId || null,
-      faturada: !!c.faturada, origem: c.origem || "manual"
+      faturada: !!c.faturada, valor_faturado: (c.valorFaturado===0 || c.valorFaturado) ? c.valorFaturado : null,
+      origem: c.origem || "manual"
     };
   }
   function rowToAula(r){
     return {
       id: r.id, alunoId: r.aluno_id, data: r.data, hora: (r.hora||"").slice(0,5),
       status: r.status, remarcadaParaId: r.remarcada_para_id,
-      faturada: !!r.faturada, origem: r.origem || "manual"
+      faturada: !!r.faturada, valorFaturado: (r.valor_faturado===0 || r.valor_faturado) ? Number(r.valor_faturado) : null,
+      origem: r.origem || "manual"
     };
   }
   function pagamentoToRow(p){
@@ -544,6 +551,7 @@ import './styles.css';
     }
     document.getElementById("gate").hidden = true;
     document.getElementById("header-date").textContent = capitalizar(diaSemanaLabel(fmtData(hoje))) + ", " + fmtDataBR(fmtData(hoje));
+    sincronizarCobrancasAutomaticas();
     renderAll();
   }
 
@@ -596,17 +604,26 @@ import './styles.css';
     var campoCobranca = document.getElementById("campo-cobranca");
     var campoFixo = document.getElementById("campo-valor-fixo");
     var campoAula = document.getElementById("campo-valor-aula");
+    var campoVencimento = document.getElementById("campo-dias-vencimento");
+    var inputVencimento = document.getElementById("f-plano-dias-vencimento");
 
     if (tipo === "avulsa"){
       campoCobranca.hidden = true;
       campoFixo.hidden = true;
       campoAula.hidden = false;
+      // avulsa não tem período/vencimento próprio: cada aula concluída já
+      // gera sua própria cobrança, vencendo na data da aula.
+      campoVencimento.hidden = true;
       return;
     }
     campoCobranca.hidden = false;
     var cobranca = document.getElementById("f-plano-cobranca").value;
     campoFixo.hidden = cobranca !== "fixa";
     campoAula.hidden = cobranca !== "por_aula";
+    campoVencimento.hidden = false;
+    if (!inputVencimento.value){
+      inputVencimento.value = tipo === "semanal" ? 2 : 5;
+    }
   };
 
   window.toggleRecDia = function(cb){
@@ -645,6 +662,7 @@ import './styles.css';
       document.getElementById("f-plano-cobranca").value = a.plano.cobranca;
       document.getElementById("f-plano-valor-fixo").value = a.plano.valorFixo || "";
       document.getElementById("f-plano-valor-aula").value = a.plano.valorAula || "";
+      document.getElementById("f-plano-dias-vencimento").value = (a.plano.diasVencimento===0 || a.plano.diasVencimento) ? a.plano.diasVencimento : "";
       if (a.recorrencia && a.recorrencia.horarios){
         Object.keys(a.recorrencia.horarios).forEach(function(dia){
           var linha = document.querySelector(".rec-dia-linha[data-dia='"+dia+"']");
@@ -693,7 +711,8 @@ import './styles.css';
         tipo: tipo,
         cobranca: cobranca,
         valorFixo: Number(document.getElementById("f-plano-valor-fixo").value || 0),
-        valorAula: Number(document.getElementById("f-plano-valor-aula").value || 0)
+        valorAula: Number(document.getElementById("f-plano-valor-aula").value || 0),
+        diasVencimento: tipo === "avulsa" ? null : Number(document.getElementById("f-plano-dias-vencimento").value || (tipo==="semanal"?2:5))
       },
       recorrencia: {
         horarios: horariosRecorrencia
@@ -804,7 +823,33 @@ import './styles.css';
   };
 
   window.cancelarAula = function(id){
-    state.aulas.forEach(function(c){ if (c.id===id) c.status="cancelada"; });
+    var aula = null;
+    state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
+    if (!aula) return;
+    var estavaFaturada = !!aula.faturada && (aula.valorFaturado===0 || !!aula.valorFaturado);
+    aula.status = "cancelada";
+
+    if (estavaFaturada){
+      var pagamentoAssociado = null;
+      state.pagamentos.forEach(function(p){
+        if ((p.aulaIds||[]).indexOf(aula.id) !== -1) pagamentoAssociado = p;
+      });
+      if (pagamentoAssociado && pagamentoAssociado.status === "pendente"){
+        pagamentoAssociado.valor = Math.max(0, pagamentoAssociado.valor - aula.valorFaturado);
+        pagamentoAssociado.aulaIds = (pagamentoAssociado.aulaIds||[]).filter(function(aid){ return aid !== aula.id; });
+        aula.faturada = false;
+        aula.valorFaturado = null;
+        if (!pagamentoAssociado.chaveReferencia && pagamentoAssociado.aulaIds.length === 0){
+          // cobrança avulsa (uma aula = uma cobrança própria): sem nenhuma
+          // aula vinculada, o lançamento não representa mais nada.
+          state.pagamentos = state.pagamentos.filter(function(p){ return p.id !== pagamentoAssociado.id; });
+        }
+      }
+      // Se a cobrança associada já estava paga, não mexe nela (mesma regra
+      // de nunca alterar o que já foi recebido) — fica como ajuste manual a
+      // cargo do personal perceber.
+    }
+
     salvarEstado(); renderAll();
     mostrarToast("Aula cancelada.");
   };
@@ -960,78 +1005,163 @@ import './styles.css';
     state.aulas.forEach(function(c){ if (c.id===id) c.status="confirmada"; });
     salvarEstado(); renderAll();
   };
+
+  // ---------- cobrança automática por período ----------
+  // Dado um tipo de ciclo (mensal/semanal) e uma data qualquer, devolve o
+  // período a que essa data pertence (início, fim, chave de referência e
+  // rótulo). Usado tanto para "hoje" quanto para a data de uma aula
+  // concluída com atraso — é isso que garante que uma aula atrasada caia no
+  // período CORRETO dela, não no período corrente (requisito F acordado).
+  function periodoDoCiclo(tipo, dataStr){
+    var d = new Date(dataStr+"T00:00:00");
+    if (tipo === "semanal"){
+      var ini = new Date(d); ini.setDate(d.getDate()-d.getDay());
+      var fim = new Date(ini); fim.setDate(ini.getDate()+6);
+      var iniStr = fmtData(ini), fimStr = fmtData(fim);
+      return {
+        inicio: iniStr, fim: fimStr,
+        chaveReferencia: "semana-"+iniStr,
+        mesReferencia: iniStr.slice(0,7),
+        labelPeriodo: "Semana de "+fmtDataBR(iniStr)+" a "+fmtDataBR(fimStr)
+      };
+    }
+    var ano = d.getFullYear(), mes = d.getMonth();
+    var iniStr = ano+"-"+String(mes+1).padStart(2,"0")+"-01";
+    var fimStr = fmtData(new Date(ano, mes+1, 0));
+    return {
+      inicio: iniStr, fim: fimStr,
+      chaveReferencia: "mes-"+iniStr.slice(0,7),
+      mesReferencia: iniStr.slice(0,7),
+      labelPeriodo: "Mensalidade de "+MESES[mes]+" de "+ano
+    };
+  }
+  function calcularVencimentoPeriodo(fimPeriodo, diasVencimento){
+    return addDias(fimPeriodo, (diasVencimento===0||diasVencimento) ? diasVencimento : 5);
+  }
+  function buscarPagamentoPorChave(alunoId, chaveReferencia){
+    var achado = null;
+    state.pagamentos.forEach(function(p){ if (p.alunoId===alunoId && p.chaveReferencia===chaveReferencia) achado = p; });
+    return achado;
+  }
+
   window.concluirAula = function(id){
     var aula = null;
     state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
     if (!aula) return;
     aula.status = "concluida";
     var aluno = getAluno(aula.alunoId);
-    if (aluno && aluno.plano.tipo === "avulsa" && !aula.faturada){
+    var gerouOuAtualizouCobranca = false;
+
+    if (aluno && aluno.plano.cobranca === "por_aula" && !aula.faturada){
       aula.faturada = true;
-      state.pagamentos.push({
-        id: uid(), alunoId: aluno.id, valor: aluno.plano.valorAula,
-        referencia: "Aula de "+fmtDataBR(aula.data), status: "pendente",
-        mesReferencia: aula.data.slice(0,7), dataVencimento: aula.data, aulaIds: [aula.id]
-      });
+      aula.valorFaturado = aluno.plano.valorAula;
+      gerouOuAtualizouCobranca = true;
+
+      if (aluno.plano.tipo === "avulsa"){
+        // avulsa: cada aula é sua própria cobrança, vencendo na própria data
+        // (comportamento original, preservado).
+        state.pagamentos.push({
+          id: uid(), alunoId: aluno.id, valor: aluno.plano.valorAula,
+          referencia: "Aula de "+fmtDataBR(aula.data), status: "pendente",
+          mesReferencia: aula.data.slice(0,7), dataVencimento: aula.data, aulaIds: [aula.id]
+        });
+      } else {
+        // mensal/semanal por_aula: agrupa no lançamento do período da DATA
+        // DA AULA (não de hoje) — requisito F.
+        var periodo = periodoDoCiclo(aluno.plano.tipo, aula.data);
+        var existente = buscarPagamentoPorChave(aluno.id, periodo.chaveReferencia);
+        if (existente && existente.status === "pendente"){
+          existente.valor += aluno.plano.valorAula;
+          existente.aulaIds = (existente.aulaIds||[]).concat([aula.id]);
+        } else if (existente && existente.status === "pago"){
+          // período já fechado e pago: nunca reabre um lançamento quitado —
+          // lança um ajuste à parte (requisito G, caso de borda).
+          state.pagamentos.push({
+            id: uid(), alunoId: aluno.id, valor: aluno.plano.valorAula,
+            referencia: "Ajuste — aula de "+fmtDataBR(aula.data)+" ("+periodo.labelPeriodo+", período já cobrado)",
+            status: "pendente", chaveReferencia: periodo.chaveReferencia+"-ajuste-"+aula.id,
+            mesReferencia: periodo.mesReferencia, dataVencimento: fmtData(hoje), aulaIds: [aula.id]
+          });
+        } else {
+          state.pagamentos.push({
+            id: uid(), alunoId: aluno.id, valor: aluno.plano.valorAula,
+            referencia: periodo.labelPeriodo, status: "pendente",
+            chaveReferencia: periodo.chaveReferencia, mesReferencia: periodo.mesReferencia,
+            dataVencimento: calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento),
+            aulaIds: [aula.id]
+          });
+        }
+      }
     }
     salvarEstado(); renderAll();
-    mostrarToast(aluno && aluno.plano.tipo==="avulsa" ? "Aula concluída e cobrança gerada." : "Aula marcada como concluída.");
+    mostrarToast(gerouOuAtualizouCobranca ? "Aula concluída e cobrança atualizada." : "Aula marcada como concluída.");
   };
 
-  // ---------- cobrança ----------
-  window.gerarCobranca = function(alunoId){
-    var aluno = getAluno(alunoId);
-    var hojeStr = fmtData(hoje);
-    var inicio, labelPeriodo, chaveReferencia;
-
-    var dataVencimento;
-    if (aluno.plano.tipo === "semanal"){
-      var d = new Date(hoje); d.setDate(hoje.getDate()-hoje.getDay());
-      inicio = fmtData(d);
-      labelPeriodo = "Semana de "+fmtDataBR(inicio)+" a "+fmtDataBR(hojeStr);
-      chaveReferencia = "semana-"+inicio;
-      dataVencimento = addDias(inicio, 5);
-    } else {
-      inicio = hojeStr.slice(0,7)+"-01";
-      labelPeriodo = "Mensalidade de "+MESES[hoje.getMonth()]+" de "+hoje.getFullYear();
-      chaveReferencia = "mes-"+hojeStr.slice(0,7);
-      dataVencimento = inicio.slice(0,7)+"-10";
-    }
-
-    var jaGerado = state.pagamentos.some(function(p){
-      return p.alunoId===alunoId && p.chaveReferencia===chaveReferencia;
-    });
-    if (jaGerado){ mostrarToast("Esse período já foi cobrado para esse aluno."); return; }
-
-    var concluidasNoPeriodo = state.aulas.filter(function(c){
-      return c.alunoId===alunoId && c.status==="concluida" && !c.faturada && c.data>=inicio && c.data<=hojeStr;
-    });
-
-    var valor, referencia, elegiveis;
-    if (aluno.plano.cobranca === "por_aula"){
-      elegiveis = concluidasNoPeriodo;
-      if (elegiveis.length===0){ mostrarToast("Nenhuma aula concluída nesse período ainda."); return; }
-      valor = elegiveis.length * aluno.plano.valorAula;
-      referencia = labelPeriodo + " · " + elegiveis.length + (elegiveis.length===1 ? " aula dada" : " aulas dadas");
-    } else {
+  // Cria (se ainda não existir) o lançamento "container" de um período para
+  // um aluno mensal/semanal. Plano fixo: valor cheio direto. Plano por
+  // aula: soma o que já estiver concluído e ainda não faturado nesse
+  // período (cobre tanto backfill de período fechado quanto o período
+  // corrente ainda em andamento) — nunca conta de novo uma aula que
+  // concluirAula() já tenha faturado.
+  function criarContainerDoPeriodo(aluno, periodo){
+    var valor = 0, aulaIds = [];
+    if (aluno.plano.cobranca === "fixa"){
       valor = aluno.plano.valorFixo;
-      referencia = labelPeriodo;
-      elegiveis = concluidasNoPeriodo;
+    } else {
+      state.aulas.forEach(function(c){
+        if (c.alunoId===aluno.id && c.status==="concluida" && !c.faturada &&
+            c.data>=periodo.inicio && c.data<=periodo.fim){
+          c.faturada = true;
+          c.valorFaturado = aluno.plano.valorAula;
+          valor += aluno.plano.valorAula;
+          aulaIds.push(c.id);
+        }
+      });
     }
-
     state.pagamentos.push({
-      id: uid(), alunoId: alunoId, valor: valor, referencia: referencia,
-      status: "pendente", chaveReferencia: chaveReferencia, mesReferencia: inicio.slice(0,7),
-      dataVencimento: dataVencimento, aulaIds: elegiveis.map(function(c){ return c.id; }),
-      periodoLabel: labelPeriodo
+      id: uid(), alunoId: aluno.id, valor: valor, referencia: periodo.labelPeriodo,
+      status: "pendente", chaveReferencia: periodo.chaveReferencia, mesReferencia: periodo.mesReferencia,
+      dataVencimento: calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento),
+      aulaIds: aulaIds
     });
-    elegiveis.forEach(function(c){ c.faturada = true; });
+  }
 
-    salvarEstado();
-    renderAll();
-    abrirDetalheAluno(alunoId);
-    mostrarToast("Cobrança gerada: "+fmtMoeda(valor));
-  };
+  // Roda uma vez a cada carregamento de dados: garante que todo aluno ativo
+  // mensal/semanal tenha o lançamento do período corrente (mesmo vazio, para
+  // já aparecer desde o início — requisito A) e preenche retroativamente
+  // qualquer período que tenha ficado sem lançamento (requisito C — cobre o
+  // caso de o personal passar dias sem abrir o sistema).
+  function sincronizarCobrancasAutomaticas(){
+    var hojeStr = fmtData(hoje);
+    var criouAlgo = false;
+
+    state.alunos.filter(function(a){
+      return a.ativo && (a.plano.tipo==="mensal" || a.plano.tipo==="semanal");
+    }).forEach(function(aluno){
+      var tipo = aluno.plano.tipo;
+      var chavesExistentes = {};
+      state.pagamentos.forEach(function(p){
+        if (p.alunoId===aluno.id && p.chaveReferencia) chavesExistentes[p.chaveReferencia] = true;
+      });
+
+      var periodoAtual = periodoDoCiclo(tipo, hojeStr);
+      var cursor = (aluno.dataCadastro ? String(aluno.dataCadastro).slice(0,10) : hojeStr);
+      var guard = 0;
+      while (guard < 130){ // trava de segurança (~10 anos de histórico mensal)
+        guard++;
+        var periodo = periodoDoCiclo(tipo, cursor);
+        if (!chavesExistentes[periodo.chaveReferencia]){
+          criarContainerDoPeriodo(aluno, periodo);
+          chavesExistentes[periodo.chaveReferencia] = true;
+          criouAlgo = true;
+        }
+        if (periodo.chaveReferencia === periodoAtual.chaveReferencia) break;
+        cursor = addDias(periodo.fim, 1);
+      }
+    });
+
+    if (criouAlgo){ salvarEstado(); }
+  }
 
   function recorrenciaLabel(rec){
     if (!rec || !rec.horarios) return null;
@@ -1466,9 +1596,6 @@ import './styles.css';
     html += '<div class="action-row">';
     html += '<a class="btn sm" href="'+mapsLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Maps</a>';
     html += '<a class="btn sm" href="'+wazeLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Waze</a>';
-    if (aluno.plano.tipo !== "avulsa"){
-      html += '<button class="btn sm primary" onclick="gerarCobranca(\''+aluno.id+'\')">'+ICONS.cash+' Gerar cobrança do período</button>';
-    }
     if (recLabel){
       html += '<button class="btn sm" onclick="gerarAulasRecorrentes(\''+aluno.id+'\')">Gerar aulas (8 semanas)</button>';
     }
@@ -2328,27 +2455,6 @@ import './styles.css';
     renderFinanceiro();
   };
 
-  window.abrirNovaCobrancaRapida = function(){
-    var sel = document.getElementById("fin-cobranca-aluno");
-    var ativos = state.alunos.filter(function(a){ return a.ativo; });
-    sel.innerHTML = ativos.length ? ativos.map(function(a){
-      return '<option value="'+a.id+'">'+a.nome+'</option>';
-    }).join("") : '<option value="">Nenhum aluno ativo</option>';
-    // conveniência: pré-seleciona o aluno atualmente filtrado na tela, sem
-    // restringir a lista — o personal continua podendo escolher qualquer outro ativo.
-    if (finAlunoFiltro !== "todos" && ativos.some(function(a){ return a.id===finAlunoFiltro; })){
-      sel.value = finAlunoFiltro;
-    }
-    abrirModal("modal-fin-cobranca-rapida");
-  };
-
-  window.confirmarNovaCobrancaRapida = function(){
-    var alunoId = document.getElementById("fin-cobranca-aluno").value;
-    if (!alunoId) return;
-    fecharModal("modal-fin-cobranca-rapida");
-    gerarCobranca(alunoId);
-  };
-
   window.abrirRegistrarRecebimento = function(){
     finAba = "abertas";
     finPagina = 1;
@@ -2509,8 +2615,7 @@ import './styles.css';
     }).join("") : '<div class="empty-state"><div class="display">Sem recebimentos ainda</div></div>';
 
     document.getElementById("fin-acoes").innerHTML =
-      '<button class="acao-btn" onclick="abrirNovaCobrancaRapida()"><span class="acao-ic dash-stat-ic teal">'+ICONS.cash+'</span>Nova cobrança</button>'
-      + '<button class="acao-btn" onclick="abrirRegistrarRecebimento()"><span class="acao-ic dash-stat-ic green">'+ICONS.check+'</span>Registrar recebimento</button>'
+      '<button class="acao-btn" onclick="abrirRegistrarRecebimento()"><span class="acao-ic dash-stat-ic green">'+ICONS.check+'</span>Registrar recebimento</button>'
       + '<button class="acao-btn" onclick="irParaTab(\'alunos\')"><span class="acao-ic dash-stat-ic violet">'+ICONS.eye+'</span>Ver alunos</button>';
   }
 
