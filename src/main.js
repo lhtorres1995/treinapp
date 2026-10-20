@@ -40,6 +40,8 @@ import './styles.css';
   var alunoFiltroCiclo = "todos";
   var alunoOrdenacao = "nome-asc";
   var agendaDiasExpandido = {};
+  var resumoGraficoDados = []; // dados já calculados do gráfico "Resumo financeiro" (reutilizados pelo popover, sem recálculo)
+  var resumoGraficoPopoverIdx = null;
 
   function uid(){
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -1227,21 +1229,105 @@ import './styles.css';
   }
 
   function renderGraficoFinanceiro(){
+    fecharResumoGraficoPopover();
     var meses = [];
     for (var i=-5; i<=0; i++){ meses.push(fmtData(new Date(hoje.getFullYear(), hoje.getMonth()+i, 1)).slice(0,7)); }
     var dados = meses.map(function(m){ return { m:m, prev:calcularPrevistoMes(m), receb:calcularRecebidoMes(m), aberto:calcularPendenteMes(m) }; });
+    resumoGraficoDados = dados; // guarda os valores já calculados para o popover de detalhe reutilizar (sem recalcular)
     var max = 1;
     dados.forEach(function(d){ max = Math.max(max, d.prev, d.receb, d.aberto); });
     function barra(cls, val){ var hpx = Math.round(val/max*112); return '<div class="chart-bar '+cls+'" style="height:'+hpx+'px"></div>'; }
-    var cols = dados.map(function(d){
-      return '<div class="chart-col"><div class="chart-bars">'+barra("prev",d.prev)+barra("receb",d.receb)+barra("aberto",d.aberto)+'</div>'
-        + '<div class="chart-xlab">'+mesLabel(d.m).split("/")[0]+'</div></div>';
+    var cols = dados.map(function(d, i){
+      var rotulo = mesLabel(d.m);
+      return '<div class="chart-col" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-label="Ver detalhes de '+rotulo+'" '
+        + 'onclick="toggleResumoGraficoDetalhe('+i+',this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleResumoGraficoDetalhe('+i+',this);}">'
+        + '<div class="chart-bars">'+barra("prev",d.prev)+barra("receb",d.receb)+barra("aberto",d.aberto)+'</div>'
+        + '<div class="chart-xlab">'+rotulo.split("/")[0]+'</div></div>';
     }).join("");
     var legenda = '<div class="chart-legend">'
       + '<span><i class="chart-dot" style="background:#CBD1DA"></i>Previsto</span>'
       + '<span><i class="chart-dot" style="background:var(--accent)"></i>Recebido</span>'
       + '<span><i class="chart-dot" style="background:var(--warning)"></i>Em aberto</span></div>';
     document.getElementById("resumo-grafico").innerHTML = '<div class="chart-fin">'+cols+'</div>'+legenda;
+  }
+
+  // Popover de detalhe do "Resumo financeiro": reutiliza exatamente os valores já calculados
+  // em resumoGraficoDados (prev/receb/aberto), sem nenhum cálculo paralelo.
+  window.toggleResumoGraficoDetalhe = function(idx, el){
+    if (resumoGraficoPopoverIdx === idx){
+      fecharResumoGraficoPopover();
+      return;
+    }
+    abrirResumoGraficoPopover(idx, el);
+  };
+
+  function abrirResumoGraficoPopover(idx, el){
+    fecharResumoGraficoPopover();
+    var d = resumoGraficoDados[idx];
+    if (!d) return;
+    resumoGraficoPopoverIdx = idx;
+    el.classList.add("ativo");
+    el.setAttribute("aria-expanded", "true");
+
+    var pop = document.createElement("div");
+    pop.className = "chart-popover";
+    pop.id = "resumo-grafico-popover";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Detalhes financeiros de " + mesLabel(d.m));
+    pop.innerHTML = '<div class="chart-popover-titulo">'+mesLabel(d.m)+'</div>'
+      + '<div class="chart-popover-linha"><i class="chart-dot" style="background:#CBD1DA"></i><span>Previsto</span><b>'+fmtMoeda(d.prev)+'</b></div>'
+      + '<div class="chart-popover-linha"><i class="chart-dot" style="background:var(--accent)"></i><span>Recebido</span><b>'+fmtMoeda(d.receb)+'</b></div>'
+      + '<div class="chart-popover-linha"><i class="chart-dot" style="background:var(--warning)"></i><span>Em aberto</span><b>'+fmtMoeda(d.aberto)+'</b></div>';
+    pop.style.left = "-9999px";
+    pop.style.top = "-9999px";
+    document.body.appendChild(pop);
+    posicionarResumoGraficoPopover(el, pop);
+
+    document.addEventListener("click", onDocClickResumoGraficoPopover, true);
+    document.addEventListener("keydown", onDocKeydownResumoGraficoPopover, true);
+    window.addEventListener("resize", fecharResumoGraficoPopover);
+  }
+
+  function posicionarResumoGraficoPopover(el, pop){
+    var r = el.getBoundingClientRect();
+    var vw = document.documentElement.clientWidth;
+    var vh = document.documentElement.clientHeight;
+    if (vw < 480){
+      pop.classList.add("mobile");
+      pop.style.left = "16px";
+      var topM = r.bottom + 10;
+      if (topM + pop.offsetHeight > vh - 12) topM = Math.max(12, r.top - pop.offsetHeight - 10);
+      pop.style.top = topM + "px";
+      return;
+    }
+    var pw = pop.offsetWidth, ph = pop.offsetHeight;
+    var left = r.left + r.width/2 - pw/2;
+    left = Math.max(12, Math.min(left, vw - pw - 12));
+    var top = r.top - ph - 10;
+    if (top < 12) top = Math.min(r.bottom + 10, vh - ph - 12);
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+  }
+
+  function fecharResumoGraficoPopover(){
+    if (resumoGraficoPopoverIdx === null) return;
+    resumoGraficoPopoverIdx = null;
+    var pop = document.getElementById("resumo-grafico-popover");
+    if (pop) pop.remove();
+    document.querySelectorAll("#resumo-grafico .chart-col").forEach(function(c){ c.classList.remove("ativo"); c.setAttribute("aria-expanded", "false"); });
+    document.removeEventListener("click", onDocClickResumoGraficoPopover, true);
+    document.removeEventListener("keydown", onDocKeydownResumoGraficoPopover, true);
+    window.removeEventListener("resize", fecharResumoGraficoPopover);
+  }
+  function onDocClickResumoGraficoPopover(e){
+    var pop = document.getElementById("resumo-grafico-popover");
+    if (!pop) return;
+    if (pop.contains(e.target)) return;
+    if (e.target.closest && e.target.closest(".chart-col")) return;
+    fecharResumoGraficoPopover();
+  }
+  function onDocKeydownResumoGraficoPopover(e){
+    if (e.key === "Escape") fecharResumoGraficoPopover();
   }
 
   window.mcalNav = function(delta){
