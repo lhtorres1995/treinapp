@@ -257,33 +257,74 @@
 
   <!-- FINANCEIRO -->
   <section class="screen" id="screen-financeiro">
-    <div class="stat-row">
-      <div class="stat-card warn">
-        <div class="stat-value sm" id="fin-total-receber">—</div>
-        <div class="stat-label">Em aberto</div>
+    <div class="alunos-head">
+      <div>
+        <h1 class="page-title">Financeiro</h1>
+        <p class="page-sub">Acompanhe suas receitas, recebimentos, pendências e a evolução financeira.</p>
       </div>
-      <div class="stat-card" style="border-color: var(--danger);">
-        <div class="stat-value sm" id="fin-total-vencidos" style="color: var(--danger);">—</div>
-        <div class="stat-label">Vencidos</div>
-      </div>
-      <div class="stat-card ok">
-        <div class="stat-value sm" id="fin-total-mes">—</div>
-        <div class="stat-label">Recebido no mês</div>
-      </div>
+      <button class="btn primary lg" onclick="abrirNovaCobrancaRapida()"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg>Nova cobrança</button>
     </div>
 
-    <div class="section-title">Visão mensal</div>
-    <div id="fin-visao-mensal"></div>
-
-    <div class="section-title">A receber</div>
-    <div class="seg-toggle" id="fin-filtro-toggle">
-      <button class="seg-btn active" data-filtro="todos" onclick="mudarFiltroFinanceiro('todos')">Todos</button>
-      <button class="seg-btn" data-filtro="vencidos" onclick="mudarFiltroFinanceiro('vencidos')">Vencidos</button>
+    <div class="agenda-toolbar" id="fin-toolbar">
+      <div class="day-nav fin-mes-nav" id="fin-mes-nav">
+        <button class="icon-btn" onclick="mudarMesFinanceiro(-1)" aria-label="Mês anterior"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="day-label" id="fin-mes-label"></div>
+        <button class="icon-btn" onclick="mudarMesFinanceiro(1)" aria-label="Próximo mês"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <select class="tool-select fin-aluno-select" id="fin-aluno-select" onchange="mudarAlunoFinanceiro(this.value)">
+        <option value="todos">Todos os alunos</option>
+      </select>
     </div>
-    <div id="fin-pendentes"></div>
 
-    <div class="section-title">Recebidos recentemente</div>
-    <div id="fin-pagos"></div>
+    <div class="dash-stats fin-indicadores" id="fin-indicadores"></div>
+
+    <div class="agenda-grid fin-grid">
+      <div class="agenda-main">
+        <div class="dash-card">
+          <div class="dash-block-head"><h3>Receitas x Recebimentos</h3></div>
+          <div id="fin-grafico"></div>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-block-head"><h3>Visão mensal</h3></div>
+          <div id="fin-visao-mensal"></div>
+        </div>
+
+        <div class="dash-block-head" style="margin-top:4px;"><h3>Cobranças</h3></div>
+        <div class="fin-abas-row">
+          <div class="seg-toggle fin-abas" id="fin-abas-toggle">
+            <button class="seg-btn active" data-aba="todas" onclick="mudarAbaFinanceiro('todas')">Todas</button>
+            <button class="seg-btn" data-aba="abertas" onclick="mudarAbaFinanceiro('abertas')">Em aberto</button>
+            <button class="seg-btn" data-aba="vencidas" onclick="mudarAbaFinanceiro('vencidas')">Vencidas</button>
+            <button class="seg-btn" data-aba="recebidas" onclick="mudarAbaFinanceiro('recebidas')">Recebidas</button>
+          </div>
+          <input id="fin-busca" class="search-input fin-busca" type="search" placeholder="Buscar aluno, descrição ou valor..." oninput="filtrarFinanceiro(this.value)">
+        </div>
+        <div id="fin-tabela-wrap" class="alunos-table-wrap">
+          <table class="alunos-table">
+            <thead><tr><th>Vencimento</th><th>Aluno</th><th>Descrição</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="fin-tabela-body"></tbody>
+          </table>
+        </div>
+        <div id="fin-cards" class="alunos-cards"></div>
+        <div class="fin-paginacao" id="fin-paginacao"></div>
+      </div>
+
+      <aside class="dash-rail" id="fin-rail">
+        <div class="dash-card">
+          <div class="dash-block-head"><h3>Próximos recebimentos</h3></div>
+          <div id="fin-proximos"></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-block-head"><h3>Recebidos recentemente</h3></div>
+          <div id="fin-recentes"></div>
+        </div>
+        <div class="dash-card">
+          <h3>Ações rápidas</h3>
+          <div class="acoes-grid" id="fin-acoes"></div>
+        </div>
+      </aside>
+    </div>
   </section>
 
   <!-- PERFIL DO PROFESSOR -->
@@ -462,6 +503,23 @@
     <div class="action-row">
       <button type="button" class="btn block" onclick="fecharModal('modal-cobranca')">Cancelar</button>
       <a id="cobranca-link" class="btn primary block" target="_blank" rel="noopener">Abrir WhatsApp</a>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA COBRANÇA RÁPIDA (Financeiro): centralizado em desktop/tablet, painel inferior no mobile -->
+<div class="modal-overlay fin-cobranca-modal" id="modal-fin-cobranca-rapida">
+  <div class="fin-cobranca-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nova cobrança</div>
+    <div class="hint" style="margin-bottom:10px;">Gera a cobrança do período atual para o aluno escolhido, seguindo as mesmas regras já usadas na ficha do aluno.</div>
+    <div class="field">
+      <label for="fin-cobranca-aluno">Aluno</label>
+      <select id="fin-cobranca-aluno"></select>
+    </div>
+    <div class="action-row">
+      <button type="button" class="btn block" onclick="fecharModal('modal-fin-cobranca-rapida')">Cancelar</button>
+      <button type="button" class="btn primary block" onclick="confirmarNovaCobrancaRapida()">Gerar cobrança</button>
     </div>
   </div>
 </div>
