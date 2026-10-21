@@ -494,10 +494,17 @@ import './styles.css';
     try {
       var r = await sb.auth.updateUser({ password: novaSenha });
       if (r.error) throw r.error;
-      // Sessão de recuperação já está ativa; entra direto no app. Este é o
-      // ÚNICO caminho autorizado a entrar no app a partir de uma sessão de
-      // recuperação — por isso o segundo argumento (ver guarda em aposLogin).
-      await aposLogin(r.data.session, true);
+      // updateUser() NÃO retorna sessão em data (só { user }) — buscar a
+      // sessão atual explicitamente. A sessão de recuperação continua
+      // válida depois do updateUser (ele só troca a senha, não invalida a
+      // sessão corrente), então isso não dispara um novo round-trip de
+      // login, só lê o que já está ativo.
+      var sessaoAtual = await sb.auth.getSession();
+      if (!sessaoAtual.data.session) throw new Error("Sessão expirou. Peça um novo link de recuperação.");
+      // Este é o ÚNICO caminho autorizado a entrar no app a partir de uma
+      // sessão de recuperação — por isso o segundo argumento (ver guarda
+      // em aposLogin).
+      await aposLogin(sessaoAtual.data.session, true);
     } catch(err){
       console.error("Erro ao redefinir senha:", err);
       setErroRedefinir((err && err.message) || "Não foi possível salvar a nova senha. Peça um novo link de recuperação.");
