@@ -121,18 +121,25 @@ import './styles.css';
   // Supabase cria uma sessão válida nesse momento, mas ela existe só para
   // permitir updateUser({password}) — nunca deve ser tratada como um login
   // normal, senão o usuário entraria no app sem nunca definir a nova senha.
-  var emFluxoRecuperacaoSenha = false;
-  // IMPORTANTE (corrige bug real reportado: app logava sozinho na tela de
-  // redefinir senha, sem deixar digitar a nova senha): a decisão de
-  // mostrar o app ou o login NUNCA deve vir de uma chamada avulsa a
-  // getSession() correndo em paralelo com este listener — as duas coisas
-  // podem resolver em qualquer ordem (a detecção do token de recuperação
-  // na URL é assíncrona, com round-trip de rede). Por isso, a ÚNICA fonte
-  // de verdade passa a ser esta lista de eventos: INITIAL_SESSION decide
-  // login/app normal, PASSWORD_RECOVERY decide a tela de redefinir senha.
-  // iniciar() (mais abaixo) só age como rede de segurança, se por algum
-  // motivo nenhum dos dois eventos chegar.
+  // Detectado de forma SÍNCRONA, direto na URL, antes de qualquer evento
+  // assíncrono do Supabase. Motivo: em alguns casos o SDK dispara
+  // INITIAL_SESSION (já com a sessão de recuperação presente) ANTES de
+  // PASSWORD_RECOVERY — se a decisão dependesse apenas do evento
+  // PASSWORD_RECOVERY, o INITIAL_SESSION chegaria primeiro, seria tratado
+  // como login normal, entraria no app e escondido o #gate inteiro; quando
+  // PASSWORD_RECOVERY chegasse depois, a tela de redefinir tentaria
+  // aparecer dentro de um contêiner pai já escondido — e o usuário nunca
+  // via nada, só o app logado direto (bug real já reproduzido). Checar a
+  // URL diretamente elimina a dependência da ordem dos eventos.
+  var emFluxoRecuperacaoSenha = /type=recovery/.test(window.location.href);
   var authEventJaProcessado = false;
+
+  if (emFluxoRecuperacaoSenha){
+    document.getElementById("gate-loading").hidden = true;
+    document.getElementById("gate-auth").hidden = false;
+    mostrarAuthView("redefinir");
+  }
+
   sb.auth.onAuthStateChange(function(event, session){
     if (event === "PASSWORD_RECOVERY"){
       emFluxoRecuperacaoSenha = true;
