@@ -1073,6 +1073,14 @@ import './styles.css';
         if (existente && existente.status === "pendente"){
           existente.valor += aluno.plano.valorAula;
           existente.aulaIds = (existente.aulaIds||[]).concat([aula.id]);
+          existente.referencia = periodo.labelPeriodo;
+          // Recalcula o vencimento sempre que o lançamento (ainda pendente)
+          // é tocado: cobre tanto um lançamento legado criado pelo mecanismo
+          // manual antigo (vencimento "dia 10 do mesmo mês") quanto uma
+          // mudança nos dias de vencimento do aluno no meio do período —
+          // nos dois casos, o vencimento correto é o calculado agora, nunca
+          // o que ficou gravado antes.
+          existente.dataVencimento = calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento);
         } else if (existente && existente.status === "pago"){
           // período já fechado e pago: nunca reabre um lançamento quitado —
           // lança um ajuste à parte (requisito G, caso de borda).
@@ -1139,9 +1147,9 @@ import './styles.css';
       return a.ativo && (a.plano.tipo==="mensal" || a.plano.tipo==="semanal");
     }).forEach(function(aluno){
       var tipo = aluno.plano.tipo;
-      var chavesExistentes = {};
+      var pagamentosPorChave = {};
       state.pagamentos.forEach(function(p){
-        if (p.alunoId===aluno.id && p.chaveReferencia) chavesExistentes[p.chaveReferencia] = true;
+        if (p.alunoId===aluno.id && p.chaveReferencia) pagamentosPorChave[p.chaveReferencia] = p;
       });
 
       var periodoAtual = periodoDoCiclo(tipo, hojeStr);
@@ -1150,10 +1158,23 @@ import './styles.css';
       while (guard < 130){ // trava de segurança (~10 anos de histórico mensal)
         guard++;
         var periodo = periodoDoCiclo(tipo, cursor);
-        if (!chavesExistentes[periodo.chaveReferencia]){
+        var existente = pagamentosPorChave[periodo.chaveReferencia];
+        if (!existente){
           criarContainerDoPeriodo(aluno, periodo);
-          chavesExistentes[periodo.chaveReferencia] = true;
+          pagamentosPorChave[periodo.chaveReferencia] = true;
           criouAlgo = true;
+        } else if (existente.status === "pendente"){
+          // Reconcilia um lançamento pendente já existente (inclusive
+          // lançamentos legados, de antes dessa automação, que podem ter o
+          // vencimento calculado do jeito antigo) com o vencimento e rótulo
+          // corretos de hoje. Nunca mexe em valor aqui — só data/rótulo — e
+          // nunca toca em lançamento já pago.
+          var vencCorreto = calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento);
+          if (existente.dataVencimento !== vencCorreto || existente.referencia !== periodo.labelPeriodo){
+            existente.dataVencimento = vencCorreto;
+            existente.referencia = periodo.labelPeriodo;
+            criouAlgo = true;
+          }
         }
         if (periodo.chaveReferencia === periodoAtual.chaveReferencia) break;
         cursor = addDias(periodo.fim, 1);
