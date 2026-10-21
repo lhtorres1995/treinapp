@@ -119,16 +119,34 @@ import './styles.css';
   // Setado pelo evento PASSWORD_RECOVERY do Supabase, disparado quando a
   // página é aberta a partir do link de redefinição enviado por e-mail. O
   // Supabase cria uma sessão válida nesse momento, mas ela existe só para
-  // permitir updateUser({password}) — iniciar() não deve tratá-la como um
-  // login normal, senão o usuário entraria no app sem nunca definir a nova
-  // senha.
+  // permitir updateUser({password}) — nunca deve ser tratada como um login
+  // normal, senão o usuário entraria no app sem nunca definir a nova senha.
   var emFluxoRecuperacaoSenha = false;
-  sb.auth.onAuthStateChange(function(event){
+  // IMPORTANTE (corrige bug real reportado: app logava sozinho na tela de
+  // redefinir senha, sem deixar digitar a nova senha): a decisão de
+  // mostrar o app ou o login NUNCA deve vir de uma chamada avulsa a
+  // getSession() correndo em paralelo com este listener — as duas coisas
+  // podem resolver em qualquer ordem (a detecção do token de recuperação
+  // na URL é assíncrona, com round-trip de rede). Por isso, a ÚNICA fonte
+  // de verdade passa a ser esta lista de eventos: INITIAL_SESSION decide
+  // login/app normal, PASSWORD_RECOVERY decide a tela de redefinir senha.
+  // iniciar() (mais abaixo) só age como rede de segurança, se por algum
+  // motivo nenhum dos dois eventos chegar.
+  var authEventJaProcessado = false;
+  sb.auth.onAuthStateChange(function(event, session){
     if (event === "PASSWORD_RECOVERY"){
       emFluxoRecuperacaoSenha = true;
+      authEventJaProcessado = true;
       document.getElementById("gate-loading").hidden = true;
       document.getElementById("gate-auth").hidden = false;
       mostrarAuthView("redefinir");
+      return;
+    }
+    if (event === "INITIAL_SESSION"){
+      authEventJaProcessado = true;
+      if (emFluxoRecuperacaoSenha) return; // nunca pisa na tela de redefinir
+      if (session){ aposLogin(session); }
+      else { mostrarGateAuth(); }
     }
   });
 
@@ -469,8 +487,10 @@ import './styles.css';
     try {
       var r = await sb.auth.updateUser({ password: novaSenha });
       if (r.error) throw r.error;
-      // Sessão de recuperação já está ativa; entra direto no app.
-      await aposLogin(r.data.session);
+      // Sessão de recuperação já está ativa; entra direto no app. Este é o
+      // ÚNICO caminho autorizado a entrar no app a partir de uma sessão de
+      // recuperação — por isso o segundo argumento (ver guarda em aposLogin).
+      await aposLogin(r.data.session, true);
     } catch(err){
       console.error("Erro ao redefinir senha:", err);
       setErroRedefinir((err && err.message) || "Não foi possível salvar a nova senha. Peça um novo link de recuperação.");
@@ -537,7 +557,11 @@ import './styles.css';
     return m;
   }
 
-  async function aposLogin(session){
+  async function aposLogin(session, viaRedefinicaoSenha){
+    // Guarda extra (defesa em profundidade, além do "return" no listener de
+    // INITIAL_SESSION acima): nunca entra no app a partir de uma sessão de
+    // recuperação, exceto pelo próprio fluxo de redefinir senha.
+    if (emFluxoRecuperacaoSenha && !viaRedefinicaoSenha) return;
     usuarioId = session.user.id;
     try {
       await carregarDadosDoServidor();
@@ -561,23 +585,27 @@ import './styles.css';
     });
   };
 
-  async function iniciar(){
-    try {
-      var s = await sb.auth.getSession();
-      if (emFluxoRecuperacaoSenha){
-        // Sessão de recuperação detectada (ver onAuthStateChange acima); a
-        // tela de redefinir senha já está visível, não prosseguir com login.
-        return;
-      }
-      if (s.data.session){ await aposLogin(s.data.session); }
-      else { mostrarGateAuth(); }
-    } catch(err){
-      console.error(err);
-      if (!emFluxoRecuperacaoSenha){
-        mostrarGateAuth();
-        setErroAuth("Falha ao conectar no servidor. Tente recarregar a página.");
-      }
-    }
+  // Rede de segurança: dá uma janela curta para o próprio onAuthStateChange
+  // (INITIAL_SESSION ou PASSWORD_RECOVERY, registrado acima) ser a fonte
+  // única de verdade sobre o que mostrar. Só chama getSession() por conta
+  // própria se, depois desse tempo, nenhum dos dois eventos tiver chegado
+  // (ex.: diferença de comportamento entre versões do supabase-js) — e
+  // mesmo assim, nunca pisa numa tela de redefinir senha já decidida.
+  function iniciar(){
+    setTimeout(function(){
+      if (authEventJaProcessado) return;
+      sb.auth.getSession().then(function(s){
+        if (authEventJaProcessado || emFluxoRecuperacaoSenha) return;
+        if (s.data.session){ aposLogin(s.data.session); }
+        else { mostrarGateAuth(); }
+      }).catch(function(err){
+        console.error(err);
+        if (!authEventJaProcessado && !emFluxoRecuperacaoSenha){
+          mostrarGateAuth();
+          setErroAuth("Falha ao conectar no servidor. Tente recarregar a página.");
+        }
+      });
+    }, 1200);
   }
 
   function getAluno(id){
