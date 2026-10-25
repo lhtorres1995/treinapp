@@ -58,18 +58,33 @@ import './styles.css';
   function fmtMoeda(v){
     return "R$ " + Number(v||0).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2});
   }
+  // Usa a mesma referência de "agora" (hoje) que o resto do app usa para
+  // tudo relacionado a data corrente — consistente com fmtData(hoje) usado
+  // em renderAgenda, renderResumo etc.
+  function aulaEhFutura(c){
+    var dataHora = new Date(c.data + "T" + (c.hora || "00:00") + ":00");
+    return dataHora.getTime() > hoje.getTime();
+  }
   function addDias(dataStr, n){
     var d = new Date(dataStr+"T00:00:00");
     d.setDate(d.getDate()+n);
     return fmtData(d);
   }
   function calcIdade(iso){
+    if (!iso) return null; // nascimento agora é opcional no cadastro
     var nasc = new Date(iso+"T00:00:00");
     var hoje2 = new Date();
     var idade = hoje2.getFullYear() - nasc.getFullYear();
     var m = hoje2.getMonth() - nasc.getMonth();
     if (m < 0 || (m === 0 && hoje2.getDate() < nasc.getDate())) idade--;
     return idade;
+  }
+  // Formata "NN anos" só quando há data de nascimento; caso contrário
+  // devolve string vazia, para os pontos da UI que mostram idade como um
+  // detalhe opcional (ex.: "32 anos · masculino" vira só "masculino").
+  function idadeLabel(iso){
+    var idade = calcIdade(iso);
+    return idade===null ? "" : (idade + " anos");
   }
   function diaSemanaLabel(iso){
     var d = new Date(iso+"T00:00:00");
@@ -864,6 +879,33 @@ import './styles.css';
     abrirModal("modal-aula");
   };
 
+  // Reverte o faturamento de uma aula já faturada (usado tanto ao cancelar
+  // quanto ao estornar uma conclusão): subtrai o valor travado da cobrança
+  // pendente associada, tira a aula de dentro dela, e remove a cobrança se
+  // ela ficou órfã (só no caso avulsa, sem chaveReferencia — um container
+  // de período mensal/semanal fica em zero mas continua existindo). Nunca
+  // mexe numa cobrança que já foi marcada como paga.
+  function reverterFaturamentoDaAula(aula){
+    var pagamentoAssociado = null;
+    state.pagamentos.forEach(function(p){
+      if ((p.aulaIds||[]).indexOf(aula.id) !== -1) pagamentoAssociado = p;
+    });
+    if (pagamentoAssociado && pagamentoAssociado.status === "pendente"){
+      pagamentoAssociado.valor = Math.max(0, pagamentoAssociado.valor - aula.valorFaturado);
+      pagamentoAssociado.aulaIds = (pagamentoAssociado.aulaIds||[]).filter(function(aid){ return aid !== aula.id; });
+      aula.faturada = false;
+      aula.valorFaturado = null;
+      if (!pagamentoAssociado.chaveReferencia && pagamentoAssociado.aulaIds.length === 0){
+        // cobrança avulsa (uma aula = uma cobrança própria): sem nenhuma
+        // aula vinculada, o lançamento não representa mais nada.
+        state.pagamentos = state.pagamentos.filter(function(p){ return p.id !== pagamentoAssociado.id; });
+      }
+    }
+    // Se a cobrança associada já estava paga, não mexe nela (mesma regra de
+    // nunca alterar o que já foi recebido) — fica como ajuste manual a
+    // cargo do personal perceber.
+  }
+
   window.cancelarAula = function(id){
     var aula = null;
     state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
@@ -872,28 +914,30 @@ import './styles.css';
     aula.status = "cancelada";
 
     if (estavaFaturada){
-      var pagamentoAssociado = null;
-      state.pagamentos.forEach(function(p){
-        if ((p.aulaIds||[]).indexOf(aula.id) !== -1) pagamentoAssociado = p;
-      });
-      if (pagamentoAssociado && pagamentoAssociado.status === "pendente"){
-        pagamentoAssociado.valor = Math.max(0, pagamentoAssociado.valor - aula.valorFaturado);
-        pagamentoAssociado.aulaIds = (pagamentoAssociado.aulaIds||[]).filter(function(aid){ return aid !== aula.id; });
-        aula.faturada = false;
-        aula.valorFaturado = null;
-        if (!pagamentoAssociado.chaveReferencia && pagamentoAssociado.aulaIds.length === 0){
-          // cobrança avulsa (uma aula = uma cobrança própria): sem nenhuma
-          // aula vinculada, o lançamento não representa mais nada.
-          state.pagamentos = state.pagamentos.filter(function(p){ return p.id !== pagamentoAssociado.id; });
-        }
-      }
-      // Se a cobrança associada já estava paga, não mexe nela (mesma regra
-      // de nunca alterar o que já foi recebido) — fica como ajuste manual a
-      // cargo do personal perceber.
+      reverterFaturamentoDaAula(aula);
     }
 
     salvarEstado(); renderAll();
     mostrarToast("Aula cancelada.");
+  };
+
+  // Desfaz a conclusão de uma aula (ex.: marcada como concluída por engano):
+  // volta o status para "agendada" e reverte o faturamento gerado, com a
+  // MESMA lógica de reversão usada no cancelamento. Nunca mexe em cobrança
+  // já paga (ver reverterFaturamentoDaAula).
+  window.estornarConclusao = function(id){
+    var aula = null;
+    state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
+    if (!aula || aula.status !== "concluida") return;
+    var estavaFaturada = !!aula.faturada && (aula.valorFaturado===0 || !!aula.valorFaturado);
+    aula.status = "agendada";
+
+    if (estavaFaturada){
+      reverterFaturamentoDaAula(aula);
+    }
+
+    salvarEstado(); renderAll();
+    mostrarToast("Conclusão estornada. A aula voltou para agendada.");
   };
 
   var confirmacaoPendente = null;
@@ -912,10 +956,19 @@ import './styles.css';
   };
 
   window.confirmarConcluir = function(id){
+    var aula = null;
+    state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
+    if (aula && aulaEhFutura(aula)){
+      mostrarToast("Essa aula ainda não aconteceu — não dá para concluir uma aula futura.");
+      return;
+    }
     pedirConfirmacao("Concluir aula", "Confirma que essa aula foi dada? Se o aluno pagar por aula, isso já gera a cobrança.", "Concluir", function(){ concluirAula(id); });
   };
   window.confirmarCancelar = function(id){
     pedirConfirmacao("Cancelar aula", "Tem certeza que quer cancelar essa aula? Essa ação pode ser desfeita remarcando depois.", "Cancelar aula", function(){ cancelarAula(id); });
+  };
+  window.confirmarEstornarConclusao = function(id){
+    pedirConfirmacao("Estornar conclusão", "Isso volta a aula para agendada e desfaz a cobrança gerada por ela (se a cobrança já tiver sido paga, ela não é alterada). Tem certeza?", "Estornar", function(){ estornarConclusao(id); });
   };
 
   window.salvarAula = async function(ev){
@@ -967,15 +1020,39 @@ import './styles.css';
     }
 
     // Nova aula (fluxo otimista): entra no estado e a sincronização valida a
-    // capacidade; se houver conflito, a reconciliação remove e avisa.
-    var novaAula = {
-      id: uid(), alunoId: document.getElementById("fa-aluno").value,
-      data: data, hora: hora, status: "agendada", faturada: false, origem: "manual"
-    };
-    state.aulas.push(novaAula);
-    salvarEstado();
-    fecharModal("modal-aula");
-    renderAll();
+    // capacidade; se houver conflito real de capacidade, a reconciliação
+    // remove e avisa (ver mensagemErroRemarcacao/sincronizarAulas).
+    function criarNovaAulaEFechar(){
+      var novaAula = {
+        id: uid(), alunoId: document.getElementById("fa-aluno").value,
+        data: data, hora: hora, status: "agendada", faturada: false, origem: "manual"
+      };
+      state.aulas.push(novaAula);
+      salvarEstado();
+      fecharModal("modal-aula");
+      renderAll();
+    }
+
+    // Antes de lançar direto, avisa (não bloqueia) se já existe outro aluno
+    // no mesmo horário — pode ser engano de digitação, ou pode ser
+    // intencional (personal que dá aula em grupo, com capacidade simultânea
+    // configurada > 1 no perfil). A capacidade de verdade continua sendo
+    // garantida pela trigger do banco (LT004); isso aqui é só para o
+    // personal não lançar sem perceber que já tem alguém nesse horário.
+    var jaOcupado = state.aulas.some(function(c){
+      return c.data === data && c.hora === hora &&
+        (c.status==="agendada" || c.status==="confirmada" || c.status==="concluida");
+    });
+    if (jaOcupado){
+      pedirConfirmacao(
+        "Horário já ocupado",
+        "Já tem um aluno agendado às "+hora+" em "+fmtDataBR(data)+". Confirma que quer agendar mais um aluno nesse mesmo horário?",
+        "Agendar mesmo assim",
+        criarNovaAulaEFechar
+      );
+      return;
+    }
+    criarNovaAulaEFechar();
   };
 
   function mensagemErroRemarcacao(err){
@@ -1090,6 +1167,14 @@ import './styles.css';
     var aula = null;
     state.aulas.forEach(function(c){ if (c.id===id) aula = c; });
     if (!aula) return;
+    // Trava de negócio (não só de UI — ver confirmarConcluir): nunca marcar
+    // como concluída uma aula que ainda não aconteceu, mesmo que o botão
+    // tenha sido acionado por algum caminho que não passe pela checagem da
+    // tela (ex.: duplo clique antes do re-render esconder o botão).
+    if (aulaEhFutura(aula)){
+      mostrarToast("Essa aula ainda não aconteceu — não dá para concluir uma aula futura.");
+      return;
+    }
     aula.status = "concluida";
     var aluno = getAluno(aula.alunoId);
     var gerouOuAtualizouCobranca = false;
@@ -1634,7 +1719,7 @@ import './styles.css';
     html += '<div class="student-detail-id">';
     html += '<div class="avatar">'+iniciais(aluno.nome)+'</div>';
     html += '<div><div class="card-title" style="font-size:16px;">'+aluno.nome+'</div>';
-    html += '<div class="card-sub">'+calcIdade(aluno.nascimento)+' anos · '+aluno.sexo+'</div></div>';
+    html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
     html += '<button class="btn sm" onclick="abrirModalAluno(\''+aluno.id+'\')">'+ICONS.edit+' Editar</button>';
     html += '</div>';
@@ -1756,7 +1841,7 @@ import './styles.css';
         + '<div class="dash-hero-actions">'
         +   '<a class="hero-btn" href="'+mapsLink(al.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Maps</a>'
         +   '<a class="hero-btn" href="'+wazeLink(al.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Waze</a>'
-        +   (alvo.status!=="concluida" ? '<button class="hero-btn primary" onclick="confirmarConcluir(\''+alvo.id+'\')">'+ICONS.check+' Concluir</button>' : '')
+        +   (alvo.status!=="concluida" && !aulaEhFutura(alvo) ? '<button class="hero-btn primary" onclick="confirmarConcluir(\''+alvo.id+'\')">'+ICONS.check+' Concluir</button>' : '')
         + '</div></div>';
     }
 
@@ -1989,11 +2074,13 @@ import './styles.css';
     html += '<a class="btn sm" href="'+wazeLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Waze</a>';
     if (c.status==="agendada" || c.status==="confirmada"){
       if (c.status==="agendada") html += '<button class="btn sm" onclick="confirmarAula(\''+c.id+'\')">'+ICONS.check+' Confirmar</button>';
-      html += '<button class="btn sm primary" onclick="confirmarConcluir(\''+c.id+'\')">Concluir</button>';
+      if (!aulaEhFutura(c)) html += '<button class="btn sm primary" onclick="confirmarConcluir(\''+c.id+'\')">Concluir</button>';
       html += '<button class="btn sm" onclick="abrirModalRemarcar(\''+c.id+'\')">Remarcar</button>';
       html += '<button class="btn sm" onclick="confirmarCancelar(\''+c.id+'\')">Cancelar</button>';
     } else if (c.status==="cancelada"){
       html += '<button class="btn sm" onclick="abrirModalRemarcar(\''+c.id+'\')">Remarcar</button>';
+    } else if (c.status==="concluida"){
+      html += '<button class="btn sm" onclick="confirmarEstornarConclusao(\''+c.id+'\')">Estornar conclusão</button>';
     }
     html += '</div></div>';
     return html;
@@ -2099,7 +2186,7 @@ import './styles.css';
         var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : '<span class="card-sub">Nenhuma agendada</span>';
         return '<tr onclick="abrirDetalheAluno(\''+a.id+'\')">'
           + '<td><div class="card-row" style="justify-content:flex-start;gap:10px;"><div class="avatar" style="width:34px;height:34px;font-size:12px;">'+iniciais(a.nome)+'</div>'
-          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+calcIdade(a.nascimento)+' anos</div></div></div></td>'
+          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+(idadeLabel(a.nascimento)||"&mdash;")+'</div></div></div></td>'
           + '<td>'+(a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</td>'
           + '<td><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span></td>'
           + '<td>'+proxLabel+'</td>'
@@ -2117,7 +2204,7 @@ import './styles.css';
         return '<div class="card" onclick="abrirDetalheAluno(\''+a.id+'\')" style="cursor:pointer;">'
           + '<div class="card-row"><div class="card-main" style="display:flex;align-items:center;gap:10px;">'
           +   '<div class="avatar" style="width:34px;height:34px;font-size:12.5px;">'+iniciais(a.nome)+'</div>'
-          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+calcIdade(a.nascimento)+' anos · '+a.telefone+'</div></div></div>'
+          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+[idadeLabel(a.nascimento), a.telefone].filter(Boolean).join(" · ")+'</div></div></div>'
           + (a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')
           + '</div>'
           + '<div class="card-row" style="margin-top:8px;"><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span><span class="card-sub">'+proxLabel+'</span></div>'
