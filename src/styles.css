@@ -960,3 +960,22 @@
     .recibo-top-grid { gap: 14px; }
     .recibo-prof-row { margin-bottom: 2px; }
   }
+
+/* ---------- Solicitações (Fase 3) ---------- */
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  padding:0 5px;margin-left:auto;background:var(--danger);color:#fff;border-radius:9px;font-size:11px;font-weight:700;}
+.solic-card-pro{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-card);}
+.solic-card-pro.respondida{opacity:.82;}
+.solic-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.solic-tag{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
+.solic-tag.remarcar{background:var(--accent-soft);color:var(--accent);}
+.solic-tag.cancelar{background:var(--danger-soft);color:var(--danger);}
+.solic-aluno{font-weight:700;font-family:var(--font-display);}
+.solic-status{margin-left:auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
+.solic-status.ok{background:var(--success-soft);color:var(--success);}
+.solic-status.no{background:var(--danger-soft);color:var(--danger);}
+.solic-linha{font-size:13.5px;color:var(--fg-muted);margin-top:3px;}
+.solic-linha b{color:var(--fg);}
+.solic-msg{font-style:italic;color:var(--fg);}
+.solic-botoes{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
