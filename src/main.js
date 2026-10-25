@@ -180,6 +180,7 @@ import './styles.css';
       id: a.id, professor_id: usuarioId,
       nome: a.nome, telefone: a.telefone, sexo: a.sexo || null,
       nascimento: a.nascimento || null, endereco: a.endereco || null,
+      email: a.email || null,
       plano_tipo: a.plano.tipo, plano_cobranca: a.plano.cobranca,
       valor_fixo: a.plano.valorFixo || 0, valor_aula: a.plano.valorAula || 0,
       dias_vencimento: (a.plano.diasVencimento===0 || a.plano.diasVencimento) ? a.plano.diasVencimento : null,
@@ -190,7 +191,8 @@ import './styles.css';
   function rowToAluno(r){
     return {
       id: r.id, nome: r.nome, telefone: r.telefone, sexo: r.sexo,
-      nascimento: r.nascimento, endereco: r.endereco,
+      nascimento: r.nascimento, endereco: r.endereco, email: r.email || "",
+      authUserId: r.auth_user_id || null,
       plano: {
         tipo: r.plano_tipo, cobranca: r.plano_cobranca,
         valorFixo: Number(r.valor_fixo)||0, valorAula: Number(r.valor_aula)||0,
@@ -745,6 +747,7 @@ import './styles.css';
       var a = getAluno(id);
       document.getElementById("f-nome").value = a.nome;
       document.getElementById("f-telefone").value = a.telefone;
+      document.getElementById("f-email").value = a.email || "";
       document.getElementById("f-sexo").value = a.sexo;
       document.getElementById("f-nascimento").value = a.nascimento;
       document.getElementById("f-endereco").value = a.endereco;
@@ -794,6 +797,7 @@ import './styles.css';
     var dados = {
       nome: document.getElementById("f-nome").value.trim(),
       telefone: document.getElementById("f-telefone").value.trim(),
+      email: document.getElementById("f-email").value.trim(),
       sexo: document.getElementById("f-sexo").value,
       nascimento: document.getElementById("f-nascimento").value,
       endereco: document.getElementById("f-endereco").value.trim(),
@@ -2087,6 +2091,13 @@ import './styles.css';
   // ---------- detalhe do aluno ----------
   window.abrirDetalheAluno = function(id){
     var aluno = getAluno(id);
+    if (!aluno){
+      // Pode acontecer depois de uma recarga do servidor (ex.: após convidar
+      // pro portal) se o aluno não estiver mais na lista local por qualquer
+      // motivo — melhor voltar pra lista do que quebrar com erro na tela.
+      voltarListaAlunos();
+      return;
+    }
     document.getElementById("alunos-lista-view").hidden = true;
     var el = document.getElementById("alunos-detalhe-view");
     el.hidden = false;
@@ -2119,6 +2130,16 @@ import './styles.css';
     html += '<div class="action-row" style="margin-top:6px;">';
     html += '<button class="btn sm ghost" onclick="confirmarAlternarAtivoAluno(\''+aluno.id+'\')">'+(aluno.ativo ? 'Inativar aluno' : 'Reativar aluno')+'</button>';
     html += '<button class="btn sm ghost" onclick="confirmarExcluirAluno(\''+aluno.id+'\')">Excluir aluno</button>';
+    html += '</div>';
+
+    html += '<div class="action-row" style="margin-top:6px;">';
+    if (aluno.authUserId){
+      html += '<span class="badge ok">'+ICONS.check+' Tem acesso ao portal</span>';
+    } else if (aluno.email){
+      html += '<button class="btn sm ghost" onclick="convidarAluno(\''+aluno.id+'\')" id="btn-convidar-'+aluno.id+'">Convidar para o portal</button>';
+    } else {
+      html += '<span class="hint">Preencha o e-mail do aluno (em Editar) para poder convidá-lo ao portal.</span>';
+    }
     html += '</div>';
 
     html += '<div class="stat-row">';
@@ -2238,6 +2259,39 @@ import './styles.css';
     voltarListaAlunos();
     renderAll();
     mostrarToast("Aluno excluído.");
+  };
+
+  // Chama a Edge Function convidar-aluno (ver supabase/functions/convidar-aluno).
+  // A service role nunca passa pelo navegador: a function valida que este
+  // personal é dono do aluno (via RLS, com o JWT da sessão atual) e só então
+  // usa a service role, do lado do servidor, pra enviar o convite.
+  window.convidarAluno = async function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    var btn = document.getElementById("btn-convidar-"+id);
+    if (btn){ btn.disabled = true; btn.textContent = "Enviando..."; }
+    try {
+      var sessao = await sb.auth.getSession();
+      var token = sessao.data.session && sessao.data.session.access_token;
+      if (!token) throw new Error("sem sessão");
+      var r = await sb.functions.invoke("convidar-aluno", {
+        body: { alunoId: id },
+        headers: { Authorization: "Bearer " + token }
+      });
+      if (r.error) throw r.error;
+      if (r.data && r.data.error) throw new Error(r.data.error);
+      mostrarToast("Convite enviado para " + aluno.email + ".");
+      // O auth_user_id só é confirmado no próximo carregamento (a Edge
+      // Function grava direto no banco, não no estado local otimista).
+      await carregarDadosDoServidor();
+      renderAll();
+      abrirDetalheAluno(id);
+    } catch(err){
+      console.error(err);
+      var msg = (err && err.message) || "Erro ao enviar o convite.";
+      mostrarToast(msg);
+      if (btn){ btn.disabled = false; btn.textContent = "Convidar para o portal"; }
+    }
   };
 
   function statusBadge(status){
