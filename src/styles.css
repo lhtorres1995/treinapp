@@ -790,6 +790,16 @@
   .asg-blk-cancelada { background: var(--danger-soft); color: var(--danger); text-decoration: line-through; opacity:.85; }
   .asg-blk-remarcada { background: var(--surface-alt); color: var(--fg-muted); text-decoration: line-through; }
 
+  /* Bloqueio manual: faixa de fundo (fica ATRÁS dos blocos de aula no DOM,
+     então aulas continuam clicáveis por cima; a faixa em si é clicável nas
+     áreas livres, para remover o bloqueio direto da agenda). */
+  .asg-bloqueio {
+    position:absolute; left:0; right:0; border:none; padding:4px 6px;
+    background: repeating-linear-gradient(135deg, var(--danger-soft), var(--danger-soft) 6px, var(--surface-alt) 6px, var(--surface-alt) 12px);
+    color: var(--danger); text-align:left; cursor:pointer; box-sizing:border-box;
+  }
+  .asg-bloqueio-label { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.02em; opacity:.85; }
+
   /* seletor de dias (mobile) */
   .dia-pill { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; min-width:40px; background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px 4px; cursor:pointer; position:relative; }
   .dia-pill-dow { font-size:9.5px; font-weight:700; text-transform:uppercase; color: var(--fg-muted); }
