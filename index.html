@@ -364,6 +364,11 @@
         <label for="f-perfil-pix">Chave Pix</label>
         <input id="f-perfil-pix" required placeholder="CPF, e-mail, telefone ou chave aleatória">
       </div>
+      <div class="field">
+        <label for="f-perfil-capacidade">Capacidade de alunos por horário</label>
+        <input id="f-perfil-capacidade" type="number" min="1" step="1" required value="1">
+        <div class="hint" style="margin-top:4px;">Quantos alunos você pode atender ao mesmo tempo, no mesmo horário. Use 1 se você dá aula para um aluno por vez; aumente se treina vários alunos juntos.</div>
+      </div>
       <button type="submit" class="btn primary block">Salvar dados</button>
     </form>
     <div class="section-title">Conta</div>
