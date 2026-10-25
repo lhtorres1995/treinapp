@@ -431,7 +431,7 @@ import './styles.css';
     state.aulas = (au.data || []).map(rowToAula);
     state.pagamentos = (pg.data || []).map(rowToPagamento);
     var p = prof.data || {};
-    state.professor = { nome: p.nome || "", telefone: p.telefone || "", pix: p.pix || "", logo: p.logo_url || null };
+    state.professor = { nome: p.nome || "", telefone: p.telefone || "", pix: p.pix || "", logo: p.logo_url || null, capacidadeSimultanea: p.capacidade_simultanea || 1 };
     snapshotDe("alunos", state.alunos);
     snapshotDe("aulas", state.aulas);
     snapshotDe("pagamentos", state.pagamentos);
@@ -776,8 +776,56 @@ import './styles.css';
       }
     };
 
-    var alunoId;
     var editando = !!editingAlunoId;
+
+    // Requisito do usuário: avisar (sem bloquear) quando os novos horários de
+    // recorrência colidirem com os de outro aluno ATIVO, acima da capacidade
+    // simultânea configurada no perfil — mesma lógica usada em salvarAula.
+    var conflitos = detectarConflitosRecorrencia(horariosRecorrencia, editando ? editingAlunoId : null);
+    if (conflitos.length > 0){
+      pedirConfirmacao(
+        "Horário já ocupado",
+        montarMensagemConflitoRecorrencia(conflitos),
+        "Salvar mesmo assim",
+        function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando); }
+      );
+      return;
+    }
+    concluirSalvarAluno(dados, horariosRecorrencia, editando);
+  };
+
+  // Para cada dia+hora da recorrência que está sendo salva, conta quantos
+  // OUTROS alunos ativos (excluindo o próprio aluno em edição) já ocupam o
+  // mesmo dia+hora na recorrência deles, e reporta os que, somando este
+  // aluno, estourariam a capacidade simultânea configurada no perfil.
+  function detectarConflitosRecorrencia(horariosRecorrencia, alunoIdExcluir){
+    var capacidade = (state.professor && state.professor.capacidadeSimultanea) || 1;
+    var conflitos = [];
+    Object.keys(horariosRecorrencia).forEach(function(dia){
+      var hora = horariosRecorrencia[dia];
+      var ocupantes = state.alunos.filter(function(a){
+        if (a.id === alunoIdExcluir) return false;
+        if (a.ativo === false) return false;
+        return a.recorrencia && a.recorrencia.horarios && a.recorrencia.horarios[dia] === hora;
+      });
+      if (ocupantes.length >= capacidade){
+        conflitos.push({ dia: dia, hora: hora, ocupantes: ocupantes, capacidade: capacidade });
+      }
+    });
+    return conflitos;
+  }
+
+  function montarMensagemConflitoRecorrencia(conflitos){
+    var nomesDiasSemana = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+    var linhas = conflitos.map(function(c){
+      var nomes = c.ocupantes.map(function(a){ return a.nome; }).join(", ");
+      return nomesDiasSemana[c.dia] + " às " + c.hora + " (já com " + nomes + "; capacidade: " + c.capacidade + ")";
+    });
+    return "Este horário já está ocupado: " + linhas.join("; ") + ". Confirma que quer salvar mesmo assim?";
+  }
+
+  function concluirSalvarAluno(dados, horariosRecorrencia, editando){
+    var alunoId;
     if (editando){
       var alunoExistente = getAluno(editingAlunoId);
       Object.assign(alunoExistente, dados);
@@ -789,6 +837,10 @@ import './styles.css';
       alunoId = dados.id;
     }
 
+    salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando);
+  }
+
+  async function salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando){
     var idsParaRemover = editando ? limparAulasRecorrenciaFutura(alunoId) : [];
     var geradas = Object.keys(horariosRecorrencia).length > 0 ? gerarAulasAPartirDaRecorrencia(alunoId) : [];
 
@@ -1039,14 +1091,15 @@ import './styles.css';
     // configurada > 1 no perfil). A capacidade de verdade continua sendo
     // garantida pela trigger do banco (LT004); isso aqui é só para o
     // personal não lançar sem perceber que já tem alguém nesse horário.
-    var jaOcupado = state.aulas.some(function(c){
+    var ocupantes = state.aulas.filter(function(c){
       return c.data === data && c.hora === hora &&
         (c.status==="agendada" || c.status==="confirmada" || c.status==="concluida");
-    });
-    if (jaOcupado){
+    }).length;
+    var capacidade = (state.professor && state.professor.capacidadeSimultanea) || 1;
+    if (ocupantes >= capacidade){
       pedirConfirmacao(
         "Horário já ocupado",
-        "Já tem um aluno agendado às "+hora+" em "+fmtDataBR(data)+". Confirma que quer agendar mais um aluno nesse mesmo horário?",
+        "Já tem "+ocupantes+" aluno(s) agendado(s) às "+hora+" em "+fmtDataBR(data)+" (capacidade configurada: "+capacidade+"). Confirma que quer agendar mais um aluno nesse mesmo horário?",
         "Agendar mesmo assim",
         criarNovaAulaEFechar
       );
@@ -1490,6 +1543,7 @@ import './styles.css';
     document.getElementById("f-perfil-nome").value = p.nome || "";
     document.getElementById("f-perfil-telefone").value = p.telefone || "";
     document.getElementById("f-perfil-pix").value = p.pix || "";
+    document.getElementById("f-perfil-capacidade").value = p.capacidadeSimultanea || 1;
     atualizarPreviewLogo();
   }
 
@@ -1533,17 +1587,21 @@ import './styles.css';
 
   window.salvarPerfil = function(ev){
     ev.preventDefault();
+    var capacidadeRaw = parseInt(document.getElementById("f-perfil-capacidade").value, 10);
+    var capacidade = (isNaN(capacidadeRaw) || capacidadeRaw < 1) ? 1 : capacidadeRaw;
     var dados = {
       nome: document.getElementById("f-perfil-nome").value.trim(),
       telefone: document.getElementById("f-perfil-telefone").value.trim(),
-      pix: document.getElementById("f-perfil-pix").value.trim()
+      pix: document.getElementById("f-perfil-pix").value.trim(),
+      capacidadeSimultanea: capacidade
     };
     (async function(){
-      var r = await sb.from("profiles").upsert({ id: usuarioId, nome: dados.nome, telefone: dados.telefone, pix: dados.pix });
+      var r = await sb.from("profiles").upsert({ id: usuarioId, nome: dados.nome, telefone: dados.telefone, pix: dados.pix, capacidade_simultanea: dados.capacidadeSimultanea });
       if (r.error){ mostrarToast("Erro ao salvar os dados."); return; }
       state.professor.nome = dados.nome;
       state.professor.telefone = dados.telefone;
       state.professor.pix = dados.pix;
+      state.professor.capacidadeSimultanea = dados.capacidadeSimultanea;
       mostrarToast("Dados salvos. Já valem para os próximos recibos.");
     })();
   };
@@ -1718,10 +1776,14 @@ import './styles.css';
     html += '<div class="student-detail-header">';
     html += '<div class="student-detail-id">';
     html += '<div class="avatar">'+iniciais(aluno.nome)+'</div>';
-    html += '<div><div class="card-title" style="font-size:16px;">'+aluno.nome+'</div>';
+    html += '<div><div class="card-title" style="font-size:16px;">'+aluno.nome+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
     html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
     html += '<button class="btn sm" onclick="abrirModalAluno(\''+aluno.id+'\')">'+ICONS.edit+' Editar</button>';
+    html += '</div>';
+    html += '<div class="action-row" style="margin-top:6px;">';
+    html += '<button class="btn sm ghost" onclick="confirmarAlternarAtivoAluno(\''+aluno.id+'\')">'+(aluno.ativo ? 'Inativar aluno' : 'Reativar aluno')+'</button>';
+    html += '<button class="btn sm ghost" onclick="confirmarExcluirAluno(\''+aluno.id+'\')">Excluir aluno</button>';
     html += '</div>';
 
     html += '<div class="stat-row">';
@@ -1778,6 +1840,69 @@ import './styles.css';
   window.voltarListaAlunos = function(){
     document.getElementById("alunos-lista-view").hidden = false;
     document.getElementById("alunos-detalhe-view").hidden = true;
+  };
+
+  window.confirmarAlternarAtivoAluno = function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    if (aluno.ativo){
+      pedirConfirmacao(
+        "Inativar aluno",
+        "Isso remove "+aluno.nome+" das listas de alunos ativos e das próximas gerações de aula por recorrência. O histórico de aulas e pagamentos dele é mantido, e você pode reativar quando quiser. Tem certeza?",
+        "Inativar",
+        function(){ alternarAtivoAluno(id); }
+      );
+    } else {
+      alternarAtivoAluno(id);
+    }
+  };
+
+  window.alternarAtivoAluno = function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    var ativando = !aluno.ativo;
+    aluno.ativo = ativando;
+    if (!ativando){
+      // Mesma limpeza usada ao editar a recorrência: tira da agenda as
+      // aulas futuras que ainda não aconteceram, sem tocar no histórico.
+      limparAulasRecorrenciaFutura(id);
+    }
+    salvarEstado();
+    renderAll();
+    abrirDetalheAluno(id);
+    mostrarToast(ativando ? "Aluno reativado." : "Aluno inativado.");
+  };
+
+  window.confirmarExcluirAluno = function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    var temAulas = state.aulas.some(function(c){ return c.alunoId===id; });
+    var temPagamentos = state.pagamentos.some(function(p){ return p.alunoId===id; });
+    if (temAulas || temPagamentos){
+      pedirConfirmacao(
+        "Excluir aluno",
+        "Não é possível excluir "+aluno.nome+": ele já tem aulas e/ou cobranças lançadas no histórico, e excluir apagaria esse histórico. Em vez disso, use \"Inativar aluno\" — o cadastro some das listas ativas, mas o histórico fica preservado. Deseja inativar agora?",
+        "Inativar",
+        function(){ if (aluno.ativo) alternarAtivoAluno(id); else mostrarToast("Esse aluno já está inativo."); }
+      );
+      return;
+    }
+    pedirConfirmacao(
+      "Excluir aluno",
+      "Isso apaga o cadastro de "+aluno.nome+" permanentemente. Ele não tem nenhuma aula ou cobrança lançada, então não há histórico a perder. Tem certeza?",
+      "Excluir",
+      function(){ excluirAluno(id); }
+    );
+  };
+
+  window.excluirAluno = function(id){
+    var antes = state.alunos.length;
+    state.alunos = state.alunos.filter(function(a){ return a.id !== id; });
+    if (state.alunos.length === antes) return;
+    salvarEstado();
+    voltarListaAlunos();
+    renderAll();
+    mostrarToast("Aluno excluído.");
   };
 
   function statusBadge(status){
