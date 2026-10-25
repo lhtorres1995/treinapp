@@ -181,6 +181,7 @@ import './styles.css';
       nome: a.nome, telefone: a.telefone, sexo: a.sexo || null,
       nascimento: a.nascimento || null, endereco: a.endereco || null,
       email: a.email || null,
+      treino_tipo: a.treinoTipo || null, treino_local: a.treinoLocal || null,
       plano_tipo: a.plano.tipo, plano_cobranca: a.plano.cobranca,
       valor_fixo: a.plano.valorFixo || 0, valor_aula: a.plano.valorAula || 0,
       dias_vencimento: (a.plano.diasVencimento===0 || a.plano.diasVencimento) ? a.plano.diasVencimento : null,
@@ -192,6 +193,7 @@ import './styles.css';
     return {
       id: r.id, nome: r.nome, telefone: r.telefone, sexo: r.sexo,
       nascimento: r.nascimento, endereco: r.endereco, email: r.email || "",
+      treinoTipo: r.treino_tipo || "", treinoLocal: r.treino_local || "",
       authUserId: r.auth_user_id || null,
       plano: {
         tipo: r.plano_tipo, cobranca: r.plano_cobranca,
@@ -751,6 +753,8 @@ import './styles.css';
       document.getElementById("f-sexo").value = a.sexo;
       document.getElementById("f-nascimento").value = a.nascimento;
       document.getElementById("f-endereco").value = a.endereco;
+      if (a.treinoTipo) document.getElementById("f-treino-tipo").value = a.treinoTipo;
+      document.getElementById("f-treino-local").value = a.treinoLocal || "";
       document.getElementById("f-plano-tipo").value = a.plano.tipo;
       document.getElementById("f-plano-cobranca").value = a.plano.cobranca;
       document.getElementById("f-plano-valor-fixo").value = a.plano.valorFixo || "";
@@ -801,6 +805,8 @@ import './styles.css';
       sexo: document.getElementById("f-sexo").value,
       nascimento: document.getElementById("f-nascimento").value,
       endereco: document.getElementById("f-endereco").value.trim(),
+      treinoTipo: document.getElementById("f-treino-tipo").value,
+      treinoLocal: document.getElementById("f-treino-local").value.trim(),
       plano: {
         tipo: tipo,
         cobranca: cobranca,
