@@ -392,6 +392,15 @@
   }
   .rec-dia-horario:disabled { opacity: .45; }
 
+  /* Disponibilidade semanal: 2 inputs de hora por linha, então 1 coluna só */
+  #disp-dias-lista.rec-dias-grid { grid-template-columns: 1fr; }
+  .disp-dia-linha { display: flex; align-items: center; gap: 8px; }
+  .disp-dia-inicio, .disp-dia-fim {
+    flex: 1; min-width: 0; background: var(--surface-alt); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 10px; color: var(--fg); font-size: 13px;
+  }
+  .disp-dia-inicio:disabled, .disp-dia-fim:disabled { opacity: .45; }
+
   .student-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
   .student-detail-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .avatar {
