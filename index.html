@@ -46,6 +46,10 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="2"/><path d="M19.4 13a1.7 1.7 0 00.34 1.87l.06.06a2.06 2.06 0 11-2.91 2.91l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V19a2.06 2.06 0 01-4.12 0v-.09a1.7 1.7 0 00-1.11-1.56 1.7 1.7 0 00-1.87.34l-.06.06a2.06 2.06 0 11-2.91-2.91l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.55-1H3a2.06 2.06 0 010-4.12h.09A1.7 1.7 0 004.6 6.9a1.7 1.7 0 00-.34-1.87l-.06-.06a2.06 2.06 0 112.91-2.91l.06.06a1.7 1.7 0 001.87.34H9a1.7 1.7 0 001-1.55V3a2.06 2.06 0 014.12 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2.06 2.06 0 112.91 2.91l-.06.06a1.7 1.7 0 00-.34 1.87V9a1.7 1.7 0 001.55 1H21a2.06 2.06 0 010 4.12h-.09a1.7 1.7 0 00-1.51 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Perfil
       </button>
+      <button class="tab-btn" data-tab="disponibilidade" onclick="irParaTab('disponibilidade')">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Disponibilidade
+      </button>
     </div>
     <div class="sidebar-foot">
       <div class="sidebar-user">
@@ -373,6 +377,89 @@
     </form>
     <div class="section-title">Conta</div>
     <button type="button" class="btn block" onclick="sairDaConta()">Sair da conta</button>
+  </section>
+
+  <!-- DISPONIBILIDADE E BLOQUEIOS -->
+  <section class="screen" id="screen-disponibilidade">
+    <div class="section-title">Horários disponíveis</div>
+    <div class="hint" style="margin-bottom:10px;">Defina quando você pode dar aula. Isso só gera um aviso (não bloqueia) quando você tentar agendar fora desse horário — útil para pegar enganos sem travar sua agenda.</div>
+    <form id="form-disponibilidade" onsubmit="salvarDisponibilidade(event)">
+      <div class="rec-dias-lista rec-dias-grid" id="disp-dias-lista">
+        <div class="disp-dia-linha" data-dia="0">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Dom</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="1">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Seg</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="2">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Ter</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="3">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Qua</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="4">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Qui</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="5">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Sex</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+        <div class="disp-dia-linha" data-dia="6">
+          <label class="dia-chip-toggle"><input type="checkbox" class="disp-dia-check" onchange="toggleDispDia(this)"><span>Sáb</span></label>
+          <input type="time" class="disp-dia-inicio" disabled>
+          <span class="hint" style="margin:0 2px;">até</span>
+          <input type="time" class="disp-dia-fim" disabled>
+        </div>
+      </div>
+      <button type="submit" class="btn primary block" style="margin-top:12px;">Salvar disponibilidade</button>
+    </form>
+
+    <div class="section-title" style="margin-top:24px;">Bloqueios manuais</div>
+    <div class="hint" style="margin-bottom:10px;">Marque dias ou horários específicos que você não pode atender (feriado, compromisso, viagem).</div>
+    <form id="form-bloqueio" onsubmit="adicionarBloqueio(event)">
+      <div class="field">
+        <label for="f-bloqueio-data-inicio">De</label>
+        <input id="f-bloqueio-data-inicio" type="date" required>
+      </div>
+      <div class="field">
+        <label for="f-bloqueio-data-fim">Até</label>
+        <input id="f-bloqueio-data-fim" type="date" required>
+      </div>
+      <div class="field">
+        <label class="dia-chip-toggle"><input type="checkbox" id="f-bloqueio-dia-inteiro" checked onchange="toggleBloqueioDiaInteiro(this)"><span>Dia inteiro</span></label>
+      </div>
+      <div class="field" id="campo-bloqueio-hora-inicio" hidden>
+        <label for="f-bloqueio-hora-inicio">Hora início</label>
+        <input id="f-bloqueio-hora-inicio" type="time">
+      </div>
+      <div class="field" id="campo-bloqueio-hora-fim" hidden>
+        <label for="f-bloqueio-hora-fim">Hora fim</label>
+        <input id="f-bloqueio-hora-fim" type="time">
+      </div>
+      <div class="field">
+        <label for="f-bloqueio-motivo">Motivo (opcional)</label>
+        <input id="f-bloqueio-motivo" placeholder="Ex: Feriado, consulta médica">
+      </div>
+      <button type="submit" class="btn primary block">Adicionar bloqueio</button>
+    </form>
+    <div id="lista-bloqueios" style="margin-top:12px;"></div>
   </section>
     </main>
   </div>
