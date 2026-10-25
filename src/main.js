@@ -172,7 +172,7 @@ import './styles.css';
     }
   });
 
-  var state = { alunos: [], aulas: [], pagamentos: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
+  var state = { alunos: [], aulas: [], pagamentos: [], disponibilidade: [], bloqueios: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
 
   // ---------- mapeamento front <-> banco ----------
   function alunoToRow(a){
@@ -216,6 +216,35 @@ import './styles.css';
       status: r.status, remarcadaParaId: r.remarcada_para_id,
       faturada: !!r.faturada, valorFaturado: (r.valor_faturado===0 || r.valor_faturado) ? Number(r.valor_faturado) : null,
       origem: r.origem || "manual"
+    };
+  }
+  function disponibilidadeToRow(d){
+    return {
+      id: d.id, professor_id: usuarioId, dia_semana: d.diaSemana,
+      hora_inicio: d.horaInicio, hora_fim: d.horaFim, ativo: d.ativo !== false
+    };
+  }
+  function rowToDisponibilidade(r){
+    return {
+      id: r.id, diaSemana: r.dia_semana,
+      horaInicio: (r.hora_inicio||"").slice(0,5), horaFim: (r.hora_fim||"").slice(0,5),
+      ativo: r.ativo !== false
+    };
+  }
+  function bloqueioToRow(b){
+    return {
+      id: b.id, professor_id: usuarioId,
+      data_inicio: b.dataInicio, data_fim: b.dataFim,
+      hora_inicio: b.horaInicio || null, hora_fim: b.horaFim || null,
+      motivo: b.motivo || null
+    };
+  }
+  function rowToBloqueio(r){
+    return {
+      id: r.id, dataInicio: r.data_inicio, dataFim: r.data_fim,
+      horaInicio: r.hora_inicio ? r.hora_inicio.slice(0,5) : null,
+      horaFim: r.hora_fim ? r.hora_fim.slice(0,5) : null,
+      motivo: r.motivo || null
     };
   }
   function pagamentoToRow(p){
@@ -422,14 +451,18 @@ import './styles.css';
       sb.from("profiles").select("*").eq("id", usuarioId).maybeSingle(),
       sb.from("alunos").select("*").order("nome"),
       sb.from("aulas").select("*"),
-      sb.from("pagamentos").select("*")
+      sb.from("pagamentos").select("*"),
+      sb.from("disponibilidade_personal").select("*").order("dia_semana"),
+      sb.from("bloqueios_agenda").select("*").order("data_inicio")
     ]);
-    var prof = res[0], al = res[1], au = res[2], pg = res[3];
-    [al, au, pg].forEach(function(r){ if (r.error) throw r.error; });
+    var prof = res[0], al = res[1], au = res[2], pg = res[3], disp = res[4], blq = res[5];
+    [al, au, pg, disp, blq].forEach(function(r){ if (r.error) throw r.error; });
     if (prof.error) throw prof.error;
     state.alunos = (al.data || []).map(rowToAluno);
     state.aulas = (au.data || []).map(rowToAula);
     state.pagamentos = (pg.data || []).map(rowToPagamento);
+    state.disponibilidade = (disp.data || []).map(rowToDisponibilidade);
+    state.bloqueios = (blq.data || []).map(rowToBloqueio);
     var p = prof.data || {};
     state.professor = { nome: p.nome || "", telefone: p.telefone || "", pix: p.pix || "", logo: p.logo_url || null, capacidadeSimultanea: p.capacidade_simultanea || 1 };
     snapshotDe("alunos", state.alunos);
@@ -782,10 +815,21 @@ import './styles.css';
     // recorrência colidirem com os de outro aluno ATIVO, acima da capacidade
     // simultânea configurada no perfil — mesma lógica usada em salvarAula.
     var conflitos = detectarConflitosRecorrencia(horariosRecorrencia, editando ? editingAlunoId : null);
-    if (conflitos.length > 0){
+    // Também avisa (sem bloquear) quando um dia+horário fixo cai fora da
+    // disponibilidade semanal configurada. Bloqueios manuais (datas pontuais)
+    // NÃO entram aqui de propósito: um bloqueio vale para datas específicas,
+    // não para um padrão semanal recorrente — ele é checado por ocorrência
+    // quando a aula concreta é gerada/agendada (salvarAula / geração de
+    // recorrência), não no momento de definir o padrão.
+    var foraDaDisponibilidade = detectarForaDaDisponibilidade(horariosRecorrencia);
+
+    if (conflitos.length > 0 || foraDaDisponibilidade.length > 0){
+      var partes = [];
+      if (conflitos.length > 0) partes.push(montarMensagemConflitoRecorrencia(conflitos));
+      if (foraDaDisponibilidade.length > 0) partes.push(montarMensagemForaDisponibilidade(foraDaDisponibilidade));
       pedirConfirmacao(
-        "Horário já ocupado",
-        montarMensagemConflitoRecorrencia(conflitos),
+        "Atenção aos horários",
+        partes.join(" "),
         "Salvar mesmo assim",
         function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando); }
       );
@@ -803,13 +847,20 @@ import './styles.css';
     var conflitos = [];
     Object.keys(horariosRecorrencia).forEach(function(dia){
       var hora = horariosRecorrencia[dia];
-      var ocupantes = state.alunos.filter(function(a){
+      // Todos os OUTROS alunos ativos com algum horário fixo nesse MESMO dia
+      // da semana — não só no mesmo horário exato: a trigger do banco
+      // considera conflito qualquer sobreposição das janelas de ~50min.
+      var outrosNoDia = state.alunos.filter(function(a){
         if (a.id === alunoIdExcluir) return false;
         if (a.ativo === false) return false;
-        return a.recorrencia && a.recorrencia.horarios && a.recorrencia.horarios[dia] === hora;
+        return a.recorrencia && a.recorrencia.horarios && a.recorrencia.horarios[dia];
+      }).map(function(a){
+        return { aluno: a, hora: a.recorrencia.horarios[dia] };
       });
-      if (ocupantes.length >= capacidade){
-        conflitos.push({ dia: dia, hora: hora, ocupantes: ocupantes, capacidade: capacidade });
+      var pico = calcularPicoComCandidato(hora, outrosNoDia);
+      if (pico > capacidade){
+        var sobrepostos = ocupantesQueSeSobrepoem(hora, outrosNoDia).map(function(o){ return o.aluno; });
+        conflitos.push({ dia: dia, hora: hora, ocupantes: sobrepostos, capacidade: capacidade, pico: pico });
       }
     });
     return conflitos;
@@ -818,10 +869,30 @@ import './styles.css';
   function montarMensagemConflitoRecorrencia(conflitos){
     var nomesDiasSemana = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
     var linhas = conflitos.map(function(c){
-      var nomes = c.ocupantes.map(function(a){ return a.nome; }).join(", ");
-      return nomesDiasSemana[c.dia] + " às " + c.hora + " (já com " + nomes + "; capacidade: " + c.capacidade + ")";
+      var nomes = c.ocupantes.map(function(a){ return a.nome + " (" + a.recorrencia.horarios[c.dia] + ")"; }).join(", ");
+      return nomesDiasSemana[c.dia] + " às " + c.hora + " (sobrepõe " + nomes + "; capacidade: " + c.capacidade + ")";
     });
-    return "Este horário já está ocupado: " + linhas.join("; ") + ". Confirma que quer salvar mesmo assim?";
+    return "Este horário se sobrepõe a outro já cadastrado (considerando aulas de ~50min): " + linhas.join("; ") + ". Confirma que quer salvar mesmo assim?";
+  }
+
+  // Dos dia+hora da recorrência que está sendo salva, retorna os que caem
+  // fora da disponibilidade semanal configurada (quando ela estiver em uso —
+  // ver disponibilidadeEstaConfigurada).
+  function detectarForaDaDisponibilidade(horariosRecorrencia){
+    var fora = [];
+    Object.keys(horariosRecorrencia).forEach(function(dia){
+      var hora = horariosRecorrencia[dia];
+      if (estaForaDaDisponibilidade(Number(dia), hora)){
+        fora.push({ dia: Number(dia), hora: hora });
+      }
+    });
+    return fora;
+  }
+
+  function montarMensagemForaDisponibilidade(itens){
+    var nomesDiasSemana = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+    var linhas = itens.map(function(i){ return nomesDiasSemana[i.dia] + " às " + i.hora; });
+    return "Está(ão) fora da sua disponibilidade configurada: " + linhas.join(", ") + ".";
   }
 
   function concluirSalvarAluno(dados, horariosRecorrencia, editando){
@@ -1091,15 +1162,33 @@ import './styles.css';
     // configurada > 1 no perfil). A capacidade de verdade continua sendo
     // garantida pela trigger do banco (LT004); isso aqui é só para o
     // personal não lançar sem perceber que já tem alguém nesse horário.
-    var ocupantes = state.aulas.filter(function(c){
-      return c.data === data && c.hora === hora &&
+    // Mesma data, qualquer aula ocupante — a sobreposição é de JANELA
+    // (~50min cada, igual ao fallback da trigger do banco), não de horário
+    // exato: duas aulas 45min "distantes" ainda podem se cruzar.
+    var ocupantesDoDia = state.aulas.filter(function(c){
+      return c.data === data &&
         (c.status==="agendada" || c.status==="confirmada" || c.status==="concluida");
-    }).length;
+    }).map(function(c){ return { hora: c.hora }; });
     var capacidade = (state.professor && state.professor.capacidadeSimultanea) || 1;
-    if (ocupantes >= capacidade){
+    var pico = calcularPicoComCandidato(hora, ocupantesDoDia);
+
+    var avisos = [];
+    if (pico > capacidade){
+      var qtdSobrepondo = ocupantesQueSeSobrepoem(hora, ocupantesDoDia).length;
+      avisos.push("Já tem "+qtdSobrepondo+" aula(s) que se sobrepõe(m) às "+hora+" em "+fmtDataBR(data)+" (considerando aulas de ~50min; capacidade configurada: "+capacidade+").");
+    }
+    if (estaForaDaDisponibilidade(diaSemanaDeData(data), hora)){
+      avisos.push("Esse horário está fora da sua disponibilidade configurada para esse dia da semana.");
+    }
+    var bloqueio = bloqueioQueCobre(data, hora);
+    if (bloqueio){
+      avisos.push("Esse horário está dentro de um bloqueio que você cadastrou: " + descricaoBloqueio(bloqueio) + ".");
+    }
+
+    if (avisos.length > 0){
       pedirConfirmacao(
-        "Horário já ocupado",
-        "Já tem "+ocupantes+" aluno(s) agendado(s) às "+hora+" em "+fmtDataBR(data)+" (capacidade configurada: "+capacidade+"). Confirma que quer agendar mais um aluno nesse mesmo horário?",
+        "Atenção ao agendar",
+        avisos.join(" ") + " Confirma que quer agendar mesmo assim?",
         "Agendar mesmo assim",
         criarNovaAulaEFechar
       );
@@ -1364,6 +1453,98 @@ import './styles.css';
     if (criouAlgo){ salvarEstado(); }
   }
 
+  // Duração padrão de uma aula quando nada foi configurado, EXATAMENTE igual
+  // ao fallback usado pela trigger de capacidade no banco (migração 0004:
+  // coalesce(profiles.duracao_habitual_min, 50)). O front-end ainda não tem
+  // um campo de duração habitual por aula/professor, então toda aula hoje
+  // efetivamente dura 50min aos olhos do servidor — por isso os avisos de
+  // conflito aqui precisam considerar a JANELA de 50min, não só o horário
+  // exato, senão o personal só descobre o conflito quando o banco rejeita.
+  var DURACAO_PADRAO_MIN = 50;
+
+  function paraMinutos(hhmm){
+    var p = (hhmm || "00:00").split(":");
+    return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+  }
+
+  // Replica a lógica de "pico real de concorrência" da trigger do banco
+  // (validar_capacidade_aula): considera o candidato + qualquer ocupante
+  // existente cujo início caia dentro da janela do candidato, e para cada um
+  // desses instantes conta quantos estão ativos ao mesmo tempo. Retorna o
+  // maior valor encontrado (o pico).
+  function calcularPicoComCandidato(horaCandidato, ocupantes){
+    var inicioCand = paraMinutos(horaCandidato), fimCand = inicioCand + DURACAO_PADRAO_MIN;
+    var instantes = [inicioCand];
+    ocupantes.forEach(function(o){
+      var ini = paraMinutos(o.hora);
+      if (ini >= inicioCand && ini < fimCand) instantes.push(ini);
+    });
+    var pico = 0;
+    instantes.forEach(function(inst){
+      var count = 1; // o próprio candidato está presente em qualquer instante dentro da sua janela
+      ocupantes.forEach(function(o){
+        var ini = paraMinutos(o.hora), fim = ini + DURACAO_PADRAO_MIN;
+        if (ini <= inst && inst < fim) count++;
+      });
+      if (count > pico) pico = count;
+    });
+    return pico;
+  }
+
+  // Dos ocupantes informados, retorna só os que realmente se sobrepõem à
+  // janela do candidato (para montar a mensagem de aviso com nomes corretos).
+  function ocupantesQueSeSobrepoem(horaCandidato, ocupantes){
+    var inicioCand = paraMinutos(horaCandidato), fimCand = inicioCand + DURACAO_PADRAO_MIN;
+    return ocupantes.filter(function(o){
+      var ini = paraMinutos(o.hora), fim = ini + DURACAO_PADRAO_MIN;
+      return ini < fimCand && fim > inicioCand;
+    });
+  }
+
+  // ---------- disponibilidade e bloqueios ----------
+  function diaSemanaDeData(dataStr){
+    return new Date(dataStr + "T00:00:00").getDay();
+  }
+
+  // Sem NENHUMA linha configurada (em qualquer dia), a disponibilidade não
+  // está em uso ainda — não restringe nada, para não quebrar quem nunca
+  // configurou isso. A partir do momento em que existe ao menos 1 linha
+  // ativa em QUALQUER dia, passa a valer a regra: um dia sem nenhuma janela
+  // ativa é um dia sem disponibilidade (ex.: personal que só atende seg-sex
+  // não precisa marcar sáb/dom como "bloqueado", só não os preenche).
+  function disponibilidadeEstaConfigurada(){
+    return state.disponibilidade.some(function(d){ return d.ativo; });
+  }
+
+  function estaForaDaDisponibilidade(diaSemana, hora){
+    if (!disponibilidadeEstaConfigurada()) return false;
+    var inicioCand = paraMinutos(hora), fimCand = inicioCand + DURACAO_PADRAO_MIN;
+    var janelasDoDia = state.disponibilidade.filter(function(d){ return d.ativo && d.diaSemana === diaSemana; });
+    var cabeInteira = janelasDoDia.some(function(j){
+      return paraMinutos(j.horaInicio) <= inicioCand && fimCand <= paraMinutos(j.horaFim);
+    });
+    return !cabeInteira;
+  }
+
+  function bloqueioQueCobre(dataStr, hora){
+    var inicioCand = paraMinutos(hora), fimCand = inicioCand + DURACAO_PADRAO_MIN;
+    var encontrado = null;
+    state.bloqueios.forEach(function(b){
+      if (encontrado) return;
+      if (dataStr < b.dataInicio || dataStr > b.dataFim) return;
+      if (!b.horaInicio && !b.horaFim){ encontrado = b; return; } // dia inteiro
+      var iniB = paraMinutos(b.horaInicio), fimB = paraMinutos(b.horaFim);
+      if (iniB < fimCand && fimB > inicioCand) encontrado = b;
+    });
+    return encontrado;
+  }
+
+  function descricaoBloqueio(b){
+    var periodo = b.dataInicio === b.dataFim ? fmtDataBR(b.dataInicio) : (fmtDataBR(b.dataInicio) + " a " + fmtDataBR(b.dataFim));
+    var horaParte = (b.horaInicio && b.horaFim) ? (" " + b.horaInicio + "–" + b.horaFim) : " (dia inteiro)";
+    return periodo + horaParte + (b.motivo ? " — " + b.motivo : "");
+  }
+
   function recorrenciaLabel(rec){
     if (!rec || !rec.horarios) return null;
     var chaves = Object.keys(rec.horarios);
@@ -1546,6 +1727,153 @@ import './styles.css';
     document.getElementById("f-perfil-capacidade").value = p.capacidadeSimultanea || 1;
     atualizarPreviewLogo();
   }
+
+  // ---------- disponibilidade e bloqueios (tela) ----------
+  function renderDisponibilidade(){
+    document.querySelectorAll(".disp-dia-linha").forEach(function(linha){
+      var dia = Number(linha.dataset.dia);
+      var cb = linha.querySelector(".disp-dia-check");
+      var inicioInput = linha.querySelector(".disp-dia-inicio");
+      var fimInput = linha.querySelector(".disp-dia-fim");
+      var row = null;
+      state.disponibilidade.forEach(function(d){ if (d.diaSemana===dia && d.ativo) row = d; });
+      cb.checked = !!row;
+      cb.closest(".dia-chip-toggle").classList.toggle("selected", !!row);
+      inicioInput.disabled = !row;
+      fimInput.disabled = !row;
+      inicioInput.value = row ? row.horaInicio : "";
+      fimInput.value = row ? row.horaFim : "";
+    });
+    renderListaBloqueios();
+  }
+
+  window.toggleDispDia = function(cb){
+    var linha = cb.closest(".disp-dia-linha");
+    var inicioInput = linha.querySelector(".disp-dia-inicio");
+    var fimInput = linha.querySelector(".disp-dia-fim");
+    var chip = cb.closest(".dia-chip-toggle");
+    chip.classList.toggle("selected", cb.checked);
+    inicioInput.disabled = !cb.checked;
+    fimInput.disabled = !cb.checked;
+    if (cb.checked){
+      if (!inicioInput.value) inicioInput.value = "07:00";
+      if (!fimInput.value) fimInput.value = "20:00";
+    }
+  };
+
+  // Salva a semana inteira de uma vez: para cada dia marcado, faz upsert da
+  // janela (criando se não existia); para cada dia que tinha linha salva e
+  // foi desmarcado, exclui. Vai direto ao banco (como salvarPerfil) em vez de
+  // passar pelo fluxo otimista de alunos/aulas — é uma tela de configuração,
+  // não dado operacional de agenda.
+  window.salvarDisponibilidade = function(ev){
+    ev.preventDefault();
+    var paraSalvar = [], idsParaExcluir = [], erroValidacao = null;
+    document.querySelectorAll(".disp-dia-linha").forEach(function(linha){
+      if (erroValidacao) return;
+      var dia = Number(linha.dataset.dia);
+      var cb = linha.querySelector(".disp-dia-check");
+      var inicioInput = linha.querySelector(".disp-dia-inicio");
+      var fimInput = linha.querySelector(".disp-dia-fim");
+      var existente = null;
+      state.disponibilidade.forEach(function(d){ if (d.diaSemana===dia) existente = d; });
+      if (cb.checked && inicioInput.value && fimInput.value){
+        if (fimInput.value <= inicioInput.value){
+          erroValidacao = "O horário final precisa ser depois do inicial (dia " + linha.querySelector("span").textContent + ").";
+          return;
+        }
+        paraSalvar.push({
+          id: (existente && existente.id) || uid(),
+          diaSemana: dia, horaInicio: inicioInput.value, horaFim: fimInput.value, ativo: true
+        });
+      } else if (existente){
+        idsParaExcluir.push(existente.id);
+      }
+    });
+    if (erroValidacao){ mostrarToast(erroValidacao); return; }
+    (async function(){
+      try {
+        if (paraSalvar.length){
+          var r = await sb.from("disponibilidade_personal").upsert(paraSalvar.map(disponibilidadeToRow));
+          if (r.error) throw r.error;
+        }
+        if (idsParaExcluir.length){
+          var rd = await sb.from("disponibilidade_personal").delete().in("id", idsParaExcluir);
+          if (rd.error) throw rd.error;
+        }
+        state.disponibilidade = paraSalvar;
+        renderDisponibilidade();
+        mostrarToast("Disponibilidade salva.");
+      } catch(err){
+        console.error(err);
+        mostrarToast("Erro ao salvar a disponibilidade. Tente de novo.");
+      }
+    })();
+  };
+
+  window.toggleBloqueioDiaInteiro = function(cb){
+    document.getElementById("campo-bloqueio-hora-inicio").hidden = cb.checked;
+    document.getElementById("campo-bloqueio-hora-fim").hidden = cb.checked;
+  };
+
+  function renderListaBloqueios(){
+    var el = document.getElementById("lista-bloqueios");
+    if (!el) return;
+    if (state.bloqueios.length === 0){
+      el.innerHTML = '<div class="empty-state"><div class="display">Nenhum bloqueio cadastrado</div></div>';
+      return;
+    }
+    var ordenados = state.bloqueios.slice().sort(function(a,b){ return a.dataInicio < b.dataInicio ? -1 : 1; });
+    el.innerHTML = ordenados.map(function(b){
+      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+descricaoBloqueio(b)+'</div></div>'+
+        '<button class="btn sm ghost" onclick="removerBloqueio(\''+b.id+'\')">Remover</button></div></div>';
+    }).join("");
+  }
+
+  window.adicionarBloqueio = function(ev){
+    ev.preventDefault();
+    var dataInicio = document.getElementById("f-bloqueio-data-inicio").value;
+    var dataFim = document.getElementById("f-bloqueio-data-fim").value;
+    var diaInteiro = document.getElementById("f-bloqueio-dia-inteiro").checked;
+    var horaInicio = diaInteiro ? null : document.getElementById("f-bloqueio-hora-inicio").value;
+    var horaFim = diaInteiro ? null : document.getElementById("f-bloqueio-hora-fim").value;
+    var motivo = document.getElementById("f-bloqueio-motivo").value.trim();
+
+    if (!dataInicio || !dataFim){ mostrarToast("Preencha as datas do bloqueio."); return; }
+    if (dataFim < dataInicio){ mostrarToast("A data final precisa ser igual ou depois da inicial."); return; }
+    if (!diaInteiro){
+      if (!horaInicio || !horaFim){ mostrarToast("Preencha hora início e fim, ou marque \"Dia inteiro\"."); return; }
+      if (horaFim <= horaInicio){ mostrarToast("A hora final precisa ser depois da inicial."); return; }
+      if (dataFim !== dataInicio){ mostrarToast("Bloqueio com hora específica só pode ser de um único dia. Para vários dias, marque \"Dia inteiro\"."); return; }
+    }
+
+    var bloqueio = { id: uid(), dataInicio: dataInicio, dataFim: dataFim, horaInicio: horaInicio, horaFim: horaFim, motivo: motivo || null };
+    (async function(){
+      try {
+        var r = await sb.from("bloqueios_agenda").insert(bloqueioToRow(bloqueio));
+        if (r.error) throw r.error;
+        state.bloqueios.push(bloqueio);
+        renderListaBloqueios();
+        document.getElementById("form-bloqueio").reset();
+        document.getElementById("f-bloqueio-dia-inteiro").checked = true;
+        window.toggleBloqueioDiaInteiro(document.getElementById("f-bloqueio-dia-inteiro"));
+        mostrarToast("Bloqueio adicionado.");
+      } catch(err){
+        console.error(err);
+        mostrarToast("Erro ao adicionar o bloqueio. Tente de novo.");
+      }
+    })();
+  };
+
+  window.removerBloqueio = function(id){
+    (async function(){
+      var r = await sb.from("bloqueios_agenda").delete().eq("id", id);
+      if (r.error){ mostrarToast("Erro ao remover o bloqueio."); return; }
+      state.bloqueios = state.bloqueios.filter(function(b){ return b.id !== id; });
+      renderListaBloqueios();
+      mostrarToast("Bloqueio removido.");
+    })();
+  };
 
   window.processarLogoPerfil = function(input){
     var file = input.files && input.files[0];
@@ -2920,6 +3248,7 @@ import './styles.css';
     renderAgenda();
     renderFinanceiro();
     renderPerfil();
+    renderDisponibilidade();
   }
 
   iniciar();
