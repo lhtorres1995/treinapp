@@ -172,7 +172,7 @@ import './styles.css';
     }
   });
 
-  var state = { alunos: [], aulas: [], pagamentos: [], disponibilidade: [], bloqueios: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
+  var state = { alunos: [], aulas: [], pagamentos: [], disponibilidade: [], bloqueios: [], solicitacoes: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
 
   // ---------- mapeamento front <-> banco ----------
   function alunoToRow(a){
@@ -472,6 +472,21 @@ import './styles.css';
     snapshotDe("alunos", state.alunos);
     snapshotDe("aulas", state.aulas);
     snapshotDe("pagamentos", state.pagamentos);
+
+    // Solicitações (Fase 3): carga tolerante e fora do Promise.all principal —
+    // se a tabela ainda não existir, o app continua funcionando normalmente.
+    try {
+      var sol = await sb.from("solicitacoes").select("*").eq("professor_id", usuarioId).order("created_at", { ascending: false });
+      state.solicitacoes = sol.error ? [] : (sol.data || []).map(rowToSolicitacao);
+    } catch(e){ state.solicitacoes = []; }
+  }
+  function rowToSolicitacao(r){
+    return {
+      id: r.id, alunoId: r.aluno_id, aulaId: r.aula_id, tipo: r.tipo,
+      dataSugerida: r.data_sugerida, horaSugerida: (r.hora_sugerida||"").slice(0,5),
+      mensagem: r.mensagem || "", status: r.status, resposta: r.resposta || "",
+      createdAt: r.created_at, respondidaEm: r.respondida_em
+    };
   }
 
   // ---------- autenticação ----------
@@ -3332,6 +3347,100 @@ import './styles.css';
     renderVisaoMensal();
   }
 
+  // ======================= Solicitações (Fase 3) =======================
+  function findSolic(id){ for (var i=0;i<state.solicitacoes.length;i++) if (state.solicitacoes[i].id===id) return state.solicitacoes[i]; return null; }
+  function findAula(id){ for (var i=0;i<state.aulas.length;i++) if (state.aulas[i].id===id) return state.aulas[i]; return null; }
+  function aulaLabel(aula){
+    if (!aula) return "(aula não encontrada)";
+    var d = new Date(aula.data+"T00:00:00");
+    return capitalizar(DIAS[d.getDay()]) + ", " + fmtDataBR(aula.data) + " · " + aula.hora;
+  }
+  function nomeAlunoSolic(id){ var a = getAluno(id); return a ? a.nome : "(aluno)"; }
+
+  function cardSolicPendente(s){
+    var aula = findAula(s.aulaId);
+    var tipoLabel = s.tipo==="remarcar" ? "Remarcação" : "Cancelamento";
+    var sugestao = (s.tipo==="remarcar" && s.dataSugerida)
+      ? '<div class="solic-linha"><b>Horário pedido:</b> '+fmtDataBR(s.dataSugerida)+' · '+s.horaSugerida+'</div>' : '';
+    var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+s.mensagem+'"</div>' : '';
+    return '<div class="solic-card-pro">'+
+      '<div class="solic-card-top"><span class="solic-tag '+s.tipo+'">'+tipoLabel+'</span><span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span></div>'+
+      '<div class="solic-linha">Aula: '+aulaLabel(aula)+'</div>'+ sugestao + msg +
+      '<div class="solic-botoes">'+
+        '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+
+        '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>'+
+      '</div></div>';
+  }
+  function cardSolicRespondida(s){
+    var aula = findAula(s.aulaId);
+    var tipoLabel = s.tipo==="remarcar" ? "Remarcação" : "Cancelamento";
+    var badge = s.status==="aprovada" ? '<span class="solic-status ok">Aprovada</span>' : '<span class="solic-status no">Negada</span>';
+    return '<div class="solic-card-pro respondida">'+
+      '<div class="solic-card-top"><span class="solic-tag '+s.tipo+'">'+tipoLabel+'</span><span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span>'+badge+'</div>'+
+      '<div class="solic-linha">Aula: '+aulaLabel(aula)+'</div></div>';
+  }
+  function renderSolicitacoes(){
+    var pend = state.solicitacoes.filter(function(s){ return s.status==="em_analise"; });
+    var resp = state.solicitacoes.filter(function(s){ return s.status!=="em_analise"; });
+    var badge = document.getElementById("solic-badge");
+    if (badge){ if (pend.length){ badge.textContent = pend.length; badge.hidden = false; } else { badge.hidden = true; } }
+    var elP = document.getElementById("solic-pendentes");
+    var elR = document.getElementById("solic-respondidas");
+    if (!elP) return;
+    elP.innerHTML = pend.length ? pend.map(cardSolicPendente).join("")
+      : '<div class="hint" style="padding:8px 0;">Nenhuma solicitação pendente.</div>';
+    elR.innerHTML = resp.length ? ('<div class="section-title" style="margin-top:20px;">Respondidas</div>'+resp.map(cardSolicRespondida).join("")) : "";
+  }
+
+  async function atualizarStatusSolic(id, status){
+    var r = await sb.from("solicitacoes").update({ status: status, respondida_em: new Date().toISOString() }).eq("id", id).select().maybeSingle();
+    if (r.error){ mostrarToast("Não consegui atualizar a solicitação."); throw r.error; }
+    var s = findSolic(id); if (s){ s.status = status; }
+    renderSolicitacoes();
+  }
+  window.recusarSolicitacao = function(id){
+    var s = findSolic(id); if (!s) return;
+    pedirConfirmacao("Recusar solicitação", "Recusar este pedido? O aluno verá como \"Negada\".", "Recusar", function(){
+      atualizarStatusSolic(id, "negada").then(function(){ mostrarToast("Solicitação recusada."); }).catch(function(){});
+    });
+  };
+  window.aceitarSolicitacao = function(id){
+    var s = findSolic(id); if (!s) return;
+    if (s.tipo==="cancelar"){
+      pedirConfirmacao("Aceitar cancelamento", "A aula será cancelada e o pedido marcado como aprovado. Continuar?", "Aceitar e cancelar", function(){
+        if (findAula(s.aulaId)) cancelarAula(s.aulaId);   // aplica o cancelamento na agenda
+        atualizarStatusSolic(id, "aprovada").then(function(){ mostrarToast("Cancelamento aplicado."); }).catch(function(){});
+      });
+    } else {
+      if (!s.dataSugerida || !s.horaSugerida){ mostrarToast("Solicitação de remarcação sem horário sugerido."); return; }
+      pedirConfirmacao("Aceitar remarcação", "A aula será remarcada para "+fmtDataBR(s.dataSugerida)+" às "+s.horaSugerida+". Continuar?", "Aceitar e remarcar", function(){
+        aplicarRemarcacaoSolic(s, id);
+      });
+    }
+  };
+  // Reaproveita a RPC remarcar_aula (valida capacidade no banco, atômica),
+  // igual ao fluxo de remarcação manual. Só marca a solicitação como aprovada
+  // se a remarcação der certo; se colidir por capacidade, avisa e deixa pendente.
+  function aplicarRemarcacaoSolic(s, id){
+    enfileirar(function(){
+      return sb.rpc("remarcar_aula", { p_aula_original_id: s.aulaId, p_nova_data: s.dataSugerida, p_nova_hora: s.horaSugerida }).then(function(r){
+        if (r.error) throw r.error;
+        var nova = rowToAula(r.data);
+        if (!state.aulas.some(function(c){ return c.id===nova.id; })) state.aulas.push(nova);
+        var origObj = null;
+        state.aulas.forEach(function(c){ if (c.id===s.aulaId){ c.status="remarcada"; c.remarcadaParaId=nova.id; origObj=c; } });
+        ultimoSnapshot.aulas[nova.id] = JSON.stringify(nova);
+        if (origObj) ultimoSnapshot.aulas[s.aulaId] = JSON.stringify(origObj);
+      });
+    }).then(function(){
+      return atualizarStatusSolic(id, "aprovada");
+    }).then(function(){
+      renderAll(); mostrarToast("Aula remarcada.");
+    }).catch(function(err){
+      mostrarToast(mensagemErroRemarcacao(err));
+    });
+  }
+
   function renderAll(){
     renderResumo();
     renderAlunos();
@@ -3339,6 +3448,7 @@ import './styles.css';
     renderFinanceiro();
     renderPerfil();
     renderDisponibilidade();
+    renderSolicitacoes();
   }
 
   iniciar();
