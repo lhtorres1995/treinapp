@@ -1853,7 +1853,7 @@ import './styles.css';
         var r = await sb.from("bloqueios_agenda").insert(bloqueioToRow(bloqueio));
         if (r.error) throw r.error;
         state.bloqueios.push(bloqueio);
-        renderListaBloqueios();
+        renderAll();
         document.getElementById("form-bloqueio").reset();
         document.getElementById("f-bloqueio-dia-inteiro").checked = true;
         window.toggleBloqueioDiaInteiro(document.getElementById("f-bloqueio-dia-inteiro"));
@@ -1865,12 +1865,19 @@ import './styles.css';
     })();
   };
 
+  window.confirmarRemoverBloqueioAgenda = function(id){
+    var b = null;
+    state.bloqueios.forEach(function(x){ if (x.id===id) b = x; });
+    if (!b) return;
+    pedirConfirmacao("Remover bloqueio", "Remover o bloqueio: " + descricaoBloqueio(b) + "?", "Remover", function(){ removerBloqueio(id); });
+  };
+
   window.removerBloqueio = function(id){
     (async function(){
       var r = await sb.from("bloqueios_agenda").delete().eq("id", id);
       if (r.error){ mostrarToast("Erro ao remover o bloqueio."); return; }
       state.bloqueios = state.bloqueios.filter(function(b){ return b.id !== id; });
-      renderListaBloqueios();
+      renderAll();
       mostrarToast("Bloqueio removido.");
     })();
   };
@@ -2784,6 +2791,29 @@ import './styles.css';
     }
 
     var colunas = dias.map(function(dStr){
+      // Bloqueios manuais que cobrem esse dia, desenhados como faixa de fundo
+      // ATRÁS das aulas (clicáveis só onde não há aula por cima, já que vêm
+      // antes no DOM — mesma técnica usada pelos blocos de aula).
+      var overlaysBloqueio = state.bloqueios.filter(function(b){
+        return dStr >= b.dataInicio && dStr <= b.dataFim;
+      }).map(function(b){
+        var diaInteiro = !b.horaInicio && !b.horaFim;
+        var topPx, heightPx;
+        if (diaInteiro){
+          topPx = 0; heightPx = totalPx;
+        } else {
+          var iniMin = Math.max(paraMinutos(b.horaInicio), minHour*60);
+          var fimMin = Math.min(paraMinutos(b.horaFim), (maxHour+1)*60);
+          if (fimMin <= iniMin) return "";
+          topPx = (iniMin - minHour*60)/60*HOUR_PX;
+          heightPx = (fimMin - iniMin)/60*HOUR_PX;
+        }
+        var rotulo = escapeAttr(b.motivo || "Bloqueado");
+        var infoCompleta = escapeAttr(descricaoBloqueio(b));
+        return '<button type="button" class="asg-bloqueio" style="top:'+topPx+'px;height:'+heightPx+'px;" onclick="confirmarRemoverBloqueioAgenda(\''+b.id+'\')" data-tip="'+infoCompleta+'" aria-label="'+infoCompleta+'" title="'+infoCompleta+'">'
+          + '<span class="asg-bloqueio-label">'+rotulo+'</span></button>';
+      }).join("");
+
       var doDia = aulasSemana.filter(function(c){return c.data===dStr;}).sort(function(a,b){ return a.hora<b.hora?-1:1; });
       var lanes = [];
       var atribuicoes = doDia.map(function(c){
@@ -2813,7 +2843,7 @@ import './styles.css';
           + '<span class="asg-blk-inner"><span class="asg-blk-hora">'+a.c.hora+'</span><span class="asg-blk-nome">'+nomeExibido+'</span></span></button>';
       }).join("");
       var colCls = "asg-col" + (dStr===hojeStr?" hoje":"");
-      return '<div class="'+colCls+'" style="height:'+totalPx+'px;">'+blocos+'</div>';
+      return '<div class="'+colCls+'" style="height:'+totalPx+'px;">'+overlaysBloqueio+blocos+'</div>';
     }).join("");
 
     var html = '<div class="asg-head">'+head+'</div>'
