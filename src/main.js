@@ -472,7 +472,7 @@ import './styles.css';
     state.disponibilidade = (disp.data || []).map(rowToDisponibilidade);
     state.bloqueios = (blq.data || []).map(rowToBloqueio);
     var p = prof.data || {};
-    state.professor = { nome: p.nome || "", telefone: p.telefone || "", pix: p.pix || "", logo: p.logo_url || null, capacidadeSimultanea: p.capacidade_simultanea || 1 };
+    state.professor = { nome: p.nome || "", telefone: p.telefone || "", pix: p.pix || "", logo: p.logo_url || null, capacidadeSimultanea: p.capacidade_simultanea || 1, pixTipo: p.pix_tipo || "", cidade: p.cidade || "" };
     snapshotDe("alunos", state.alunos);
     snapshotDe("aulas", state.aulas);
     snapshotDe("pagamentos", state.pagamentos);
@@ -1754,6 +1754,8 @@ import './styles.css';
     document.getElementById("f-perfil-nome").value = p.nome || "";
     document.getElementById("f-perfil-telefone").value = p.telefone || "";
     document.getElementById("f-perfil-pix").value = p.pix || "";
+    document.getElementById("f-perfil-pix-tipo").value = p.pixTipo || "";
+    document.getElementById("f-perfil-cidade").value = p.cidade || "";
     document.getElementById("f-perfil-capacidade").value = p.capacidadeSimultanea || 1;
     atualizarPreviewLogo();
   }
@@ -1958,16 +1960,20 @@ import './styles.css';
       nome: document.getElementById("f-perfil-nome").value.trim(),
       telefone: document.getElementById("f-perfil-telefone").value.trim(),
       pix: document.getElementById("f-perfil-pix").value.trim(),
+      pixTipo: document.getElementById("f-perfil-pix-tipo").value,
+      cidade: document.getElementById("f-perfil-cidade").value.trim(),
       capacidadeSimultanea: capacidade
     };
     (async function(){
-      var r = await sb.from("profiles").upsert({ id: usuarioId, nome: dados.nome, telefone: dados.telefone, pix: dados.pix, capacidade_simultanea: dados.capacidadeSimultanea });
+      var r = await sb.from("profiles").upsert({ id: usuarioId, nome: dados.nome, telefone: dados.telefone, pix: dados.pix, pix_tipo: dados.pixTipo || null, cidade: dados.cidade || null, capacidade_simultanea: dados.capacidadeSimultanea });
       if (r.error){ mostrarToast("Erro ao salvar os dados."); return; }
       state.professor.nome = dados.nome;
       state.professor.telefone = dados.telefone;
       state.professor.pix = dados.pix;
+      state.professor.pixTipo = dados.pixTipo;
+      state.professor.cidade = dados.cidade;
       state.professor.capacidadeSimultanea = dados.capacidadeSimultanea;
-      mostrarToast("Dados salvos. Já valem para os próximos recibos.");
+      mostrarToast("Dados salvos. Já valem para os próximos recibos e cobranças.");
     })();
   };
 
