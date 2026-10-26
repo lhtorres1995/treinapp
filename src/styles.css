@@ -1007,3 +1007,9 @@
 .checkin-chip{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;border-radius:999px;
   background:var(--success-soft);color:var(--success);font-size:12px;font-weight:700;}
 .checkin-chip svg{width:14px;height:14px;}
+
+/* Check-out: confirmação / seleção de aula */
+.checkin-confirm{padding:4px 2px;}
+.checkin-confirm-t{font-weight:700;font-size:15px;margin-bottom:4px;}
+.checkin-confirm-s{font-size:13px;color:var(--fg-muted);margin-bottom:14px;}
+.checkin-opt{margin-bottom:8px;justify-content:flex-start;}

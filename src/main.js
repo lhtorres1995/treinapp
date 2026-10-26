@@ -203,7 +203,8 @@ import './styles.css';
       },
       recorrencia: { horarios: r.recorrencia_horarios || {} },
       ativo: r.ativo !== false,
-      dataCadastro: r.created_at || null
+      dataCadastro: r.created_at || null,
+      checkinToken: r.checkin_token || null
     };
   }
   function aulaToRow(c){
@@ -212,7 +213,8 @@ import './styles.css';
       data: c.data, hora: c.hora, status: c.status,
       remarcada_para_id: c.remarcadaParaId || null,
       faturada: !!c.faturada, valor_faturado: (c.valorFaturado===0 || c.valorFaturado) ? c.valorFaturado : null,
-      origem: c.origem || "manual"
+      origem: c.origem || "manual",
+      checkin_em: c.checkinEm || null, checkin_origem: c.checkinOrigem || null
     };
   }
   function rowToAula(r){
@@ -220,7 +222,8 @@ import './styles.css';
       id: r.id, alunoId: r.aluno_id, data: r.data, hora: (r.hora||"").slice(0,5),
       status: r.status, remarcadaParaId: r.remarcada_para_id,
       faturada: !!r.faturada, valorFaturado: (r.valor_faturado===0 || r.valor_faturado) ? Number(r.valor_faturado) : null,
-      origem: r.origem || "manual", checkinEm: r.checkin_em || null
+      origem: r.origem || "manual", checkinEm: r.checkin_em || null,
+      checkinOrigem: r.checkin_origem || null
     };
   }
   function disponibilidadeToRow(d){
@@ -2559,7 +2562,7 @@ import './styles.css';
 
   function renderAcoes(containerId){
     var acoes = [
-      { ic: SVG_QR, cor:"teal", lab:"Check-in", fn:"abrirCheckinQR()" },
+      { ic: SVG_QR, cor:"teal", lab:"Check-out", fn:"abrirCheckinQR()" },
       { ic: SVG_PEOPLE, cor:"violet", lab:"Novo aluno", fn:"abrirModalAluno()" },
       { ic: SVG_CAL, cor:"amber", lab:"Nova aula", fn:"abrirModalAula()" },
       { ic: SVG_DUMBBELL, cor:"green", lab:"Agenda", fn:"irParaTab('agenda')" }
@@ -2602,7 +2605,9 @@ import './styles.css';
     var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + aluno.nome;
     var html = '<div class="card">';
     html += '<div class="card-row"><div class="card-main"><div class="card-title">'+titulo+'</div><div class="card-sub">'+aluno.endereco+'</div></div>'+statusBadge(c.status)+'</div>';
-    if (c.checkinEm){
+    if (c.checkinOrigem==="checkout"){
+      html += '<div class="checkin-chip">'+ICONS.check+' Concluída via check-out'+(c.checkinEm?' · '+horaCheckin(c.checkinEm):'')+'</div>';
+    } else if (c.checkinEm){
       html += '<div class="checkin-chip">'+ICONS.check+' Check-in '+horaCheckin(c.checkinEm)+'</div>';
     }
     if (c.status==="remarcada" && c.remarcadaParaId){
@@ -2641,28 +2646,18 @@ import './styles.css';
     if(reader) reader.hidden=false;
     if(btn) btn.hidden=true;
   }
-  function mostrarResultadoCheckin(d){
+  // Renderiza uma mensagem de resultado (ok | aviso | erro) no modal de check-out.
+  function mostrarMsgCheckin(cls, titulo, sub){
     var res=document.getElementById("checkin-resultado");
     var reader=document.getElementById("checkin-reader");
     var btn=document.getElementById("checkin-reiniciar");
     if(reader) reader.hidden=true;
     if(btn) btn.hidden=false;
-    var cls, ic, titulo, sub;
-    if(d && d.ok && d.jafeito){
-      cls="aviso"; ic=ICONS.check; titulo=(d.aluno||"Aluno")+" já tinha check-in hoje";
-      sub="Aula das "+(d.hora||"--")+".";
-    } else if(d && d.ok){
-      cls="ok"; ic=ICONS.check; titulo="Check-in de "+(d.aluno||"aluno")+" registrado!";
-      sub="Aula das "+(d.hora||"--")+".";
-    } else {
-      cls="erro"; ic=ICONS.close||"!"; titulo=(d && d.titulo) ? d.titulo : "Não foi possível registrar";
-      sub=(d && d.erro) ? d.erro : "Tente novamente.";
-      if(d && d.aluno) sub=d.aluno+": "+sub;
-    }
+    var ic = cls==="erro" ? (ICONS.close||"!") : ICONS.check;
     if(res){
       res.hidden=false;
       res.innerHTML='<div class="checkin-res '+cls+'"><span class="checkin-res-ic">'+ic+'</span>'+
-        '<div><div class="checkin-res-t">'+titulo+'</div><div class="checkin-res-s">'+sub+'</div></div></div>';
+        '<div><div class="checkin-res-t">'+titulo+'</div><div class="checkin-res-s">'+(sub||"")+'</div></div></div>';
     }
   }
   async function iniciarScanner(){
@@ -2671,7 +2666,7 @@ import './styles.css';
       await qrScanner.start({ facingMode:"environment" }, { fps:10, qrbox:{width:230,height:230} }, onQrScan, function(){});
     }catch(e){
       console.error(e);
-      mostrarResultadoCheckin({ ok:false, titulo:"Câmera indisponível", erro:"Permita o acesso à câmera no navegador e tente de novo." });
+      mostrarMsgCheckin("erro","Câmera indisponível","Permita o acesso à câmera no navegador e tente de novo.");
     }
   }
   async function pararScanner(){
@@ -2683,20 +2678,65 @@ import './styles.css';
     qrOcupado = true;
     await pararScanner();
     var token = texto.slice("LT360CHECKIN:".length).trim();
-    await window.checkinProcessarToken(token);
+    window.checkinProcessarToken(token);
   }
-  // Processa um token de check-in: chama o RPC, mostra o resultado e atualiza a
-  // presença localmente. Exposto para desacoplar da câmera (e permitir testes).
-  window.checkinProcessarToken = async function(token){
-    try{
-      var r = await sb.rpc("checkin_por_token", { p_token: token });
-      if(r.error){ mostrarResultadoCheckin({ ok:false, erro:(r.error.message||"Erro ao registrar.") }); return; }
-      mostrarResultadoCheckin(r.data);
-      if(r.data && r.data.ok && r.data.aula_id){
-        var a=null; state.aulas.forEach(function(x){ if(x.id===r.data.aula_id) a=x; });
-        if(a){ a.checkinEm = new Date().toISOString(); renderAll(); }
-      }
-    }catch(e){ console.error(e); mostrarResultadoCheckin({ ok:false, erro:"Falha de conexão." }); }
+  // Resolve o token do aluno (local, sob RLS do personal), acha a(s) aula(s) de
+  // HOJE que dá para concluir e pede confirmação. Exposto para desacoplar da
+  // câmera e permitir testes. A conclusão em si reusa concluirAula (mesma regra
+  // de faturamento do botão manual — fonte única da verdade).
+  window.checkinProcessarToken = function(token){
+    var aluno=null;
+    state.alunos.forEach(function(a){ if(a.checkinToken && a.checkinToken===token) aluno=a; });
+    if(!aluno){ mostrarMsgCheckin("erro","QR não reconhecido","Este QR não corresponde a nenhum aluno seu."); return; }
+    var hojeStr = fmtData(hoje);
+    var daAulaHoje = function(c){ return c.alunoId===aluno.id && c.data===hojeStr; };
+    var candidatas = state.aulas.filter(function(c){
+      return daAulaHoje(c) && (c.status==="agendada"||c.status==="confirmada") && !aulaEhFutura(c);
+    }).sort(function(a,b){ return a.hora<b.hora?-1:1; });
+
+    if(candidatas.length===0){
+      var jaConcluida = state.aulas.some(function(c){ return daAulaHoje(c) && c.status==="concluida"; });
+      var futuraHoje = state.aulas.some(function(c){ return daAulaHoje(c) && (c.status==="agendada"||c.status==="confirmada") && aulaEhFutura(c); });
+      if(jaConcluida) mostrarMsgCheckin("aviso","Aula já finalizada", aluno.nome+" já teve o check-out da aula de hoje.");
+      else if(futuraHoje) mostrarMsgCheckin("aviso","Ainda não é hora", "A aula de hoje de "+aluno.nome+" ainda não começou.");
+      else mostrarMsgCheckin("erro","Sem aula hoje", aluno.nome+" não tem aula de hoje para finalizar.");
+      return;
+    }
+    mostrarConfirmCheckout(aluno, candidatas);
+  };
+  // Tela de confirmação (1 aula) ou seleção (várias) dentro do modal.
+  function mostrarConfirmCheckout(aluno, candidatas){
+    var res=document.getElementById("checkin-resultado");
+    var reader=document.getElementById("checkin-reader");
+    var btn=document.getElementById("checkin-reiniciar");
+    if(reader) reader.hidden=true;
+    if(btn) btn.hidden=false;
+    var html;
+    if(candidatas.length===1){
+      var c=candidatas[0];
+      html='<div class="checkin-confirm"><div class="checkin-confirm-t">Finalizar a aula de '+aluno.nome+'?</div>'+
+        '<div class="checkin-confirm-s">Aula das '+c.hora+' · '+fmtDataBR(c.data)+'. Se ele paga por aula, isso já gera a cobrança.</div>'+
+        '<button class="btn primary block" onclick="checkinFinalizar(\''+c.id+'\')">'+ICONS.check+' Finalizar aula</button></div>';
+    } else {
+      html='<div class="checkin-confirm"><div class="checkin-confirm-t">'+aluno.nome+' tem mais de uma aula hoje</div>'+
+        '<div class="checkin-confirm-s">Toque na sessão que você quer finalizar:</div>'+
+        candidatas.map(function(c){
+          return '<button class="btn block checkin-opt" onclick="checkinFinalizar(\''+c.id+'\')">'+ICONS.check+' Aula das '+c.hora+'</button>';
+        }).join("")+'</div>';
+    }
+    if(res){ res.hidden=false; res.innerHTML=html; }
+  }
+  // Conclui via check-out: carimba checkin_em/origem e reusa concluirAula.
+  window.checkinFinalizar = function(aulaId){
+    var aula=null; state.aulas.forEach(function(c){ if(c.id===aulaId) aula=c; });
+    if(!aula){ mostrarMsgCheckin("erro","Aula não encontrada","Tente escanear de novo."); return; }
+    if(aulaEhFutura(aula)){ mostrarMsgCheckin("aviso","Ainda não é hora","Essa aula ainda não começou."); return; }
+    if(aula.status==="concluida"){ var al0=getAluno(aula.alunoId); mostrarMsgCheckin("aviso","Aula já finalizada",(al0?al0.nome:"O aluno")+" já teve o check-out dessa aula."); return; }
+    aula.checkinEm = new Date().toISOString();
+    aula.checkinOrigem = "checkout";
+    concluirAula(aulaId); // seta status, faturamento, salva e re-renderiza
+    var al=getAluno(aula.alunoId);
+    mostrarMsgCheckin("ok","Aula finalizada!",(al?al.nome:"Aluno")+" · aula das "+aula.hora+" concluída via check-out.");
   };
   window.abrirCheckinQR = async function(){
     abrirModal("modal-checkin");
