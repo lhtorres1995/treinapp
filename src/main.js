@@ -2357,8 +2357,34 @@ import './styles.css';
     return {agendada:"Agendada", confirmada:"Confirmada", concluida:"Concluída"}[s] || "Agendada";
   }
 
+  // Aulas que já aconteceram e continuam sem conclusão (nem canceladas/remarcadas).
+  function aulasPendentesConclusao(){
+    return state.aulas.filter(function(c){
+      return (c.status==="agendada"||c.status==="confirmada") && !aulaEhFutura(c);
+    }).sort(function(a,b){ return (a.data+a.hora) > (b.data+b.hora) ? -1 : 1; }); // mais recentes primeiro
+  }
+  function renderPendentesConclusao(){
+    var box = document.getElementById("resumo-pendentes");
+    if (!box) return;
+    var pend = aulasPendentesConclusao();
+    if (!pend.length){ box.innerHTML = ""; return; }
+    var hojeStr = fmtData(hoje);
+    var itens = pend.slice(0, 6).map(function(c){
+      var al = getAluno(c.alunoId);
+      var quando = (c.data===hojeStr ? "Hoje" : fmtDataBR(c.data).slice(0,5)) + " · " + c.hora;
+      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+(al?al.nome:"Aluno")+'</div>'+
+        '<div class="pend-quando">'+quando+'</div></div>'+
+        '<button class="btn sm primary" onclick="confirmarConcluir(\''+c.id+'\')">'+ICONS.check+' Concluir</button></div>';
+    }).join("");
+    var extra = pend.length>6 ? '<div class="pend-mais">+ '+(pend.length-6)+' aula(s) na agenda</div>' : '';
+    box.innerHTML = '<div class="pend-card"><div class="pend-head"><span class="pend-ic">'+ICONS.clock+'</span>'+
+      '<div><div class="pend-t">'+pend.length+' aula'+(pend.length>1?'s':'')+' aguardando conclusão</div>'+
+      '<div class="pend-s">Já aconteceram e ainda não foram concluídas. Finalize por aqui, pelo check-out (QR) ou na agenda.</div></div></div>'+
+      itens+extra+'</div>';
+  }
   function renderResumo(){
     renderShell();
+    renderPendentesConclusao();
     var hojeStr = fmtData(hoje);
     var aulasHoje = state.aulas.filter(function(c){return c.data===hojeStr;})
       .sort(function(a,b){ return a.hora < b.hora ? -1 : 1; });
