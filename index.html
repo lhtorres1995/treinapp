@@ -504,6 +504,23 @@
   </div>
 </div>
 
+<!-- MODAL CHECK-IN (QR) -->
+<div class="modal-overlay" id="modal-checkin">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Check-in por QR</div>
+        <div class="modal-subtitle">Aponte a câmera para o QR que o aluno mostra no portal dele.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharCheckin()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="checkin-reader" class="checkin-reader"></div>
+    <div id="checkin-resultado" class="checkin-resultado" hidden></div>
+    <button type="button" class="btn block" id="checkin-reiniciar" onclick="reiniciarCheckin()" hidden>Escanear outro aluno</button>
+  </div>
+</div>
+
 <!-- MODAL ALUNO -->
 <div class="modal-overlay" id="modal-aluno">
   <div class="modal-sheet lg">
