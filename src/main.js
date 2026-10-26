@@ -484,6 +484,7 @@ import './styles.css';
     return {
       id: r.id, alunoId: r.aluno_id, aulaId: r.aula_id, tipo: r.tipo,
       dataSugerida: r.data_sugerida, horaSugerida: (r.hora_sugerida||"").slice(0,5),
+      contraData: r.contra_data, contraHora: (r.contra_hora||"").slice(0,5),
       mensagem: r.mensagem || "", status: r.status, resposta: r.resposta || "",
       createdAt: r.created_at, respondidaEm: r.respondida_em
     };
@@ -3357,38 +3358,56 @@ import './styles.css';
   }
   function nomeAlunoSolic(id){ var a = getAluno(id); return a ? a.nome : "(aluno)"; }
 
+  function tagTipo(s){ return '<span class="solic-tag '+s.tipo+'">'+(s.tipo==="remarcar"?"Remarcação":"Cancelamento")+'</span>'; }
+  function waAlunoBtn(s){
+    var a = getAluno(s.alunoId);
+    if (!a || !a.telefone) return "";
+    var msg = "Olá "+((a.nome||"").split(" ")[0])+"! Sobre sua solicitação no portal LT360...";
+    return '<a class="btn sm solic-wa" href="'+whatsLink(a.telefone, msg)+'" target="_blank" rel="noopener">'+ICONS.whats+' WhatsApp</a>';
+  }
   function cardSolicPendente(s){
-    var aula = findAula(s.aulaId);
-    var tipoLabel = s.tipo==="remarcar" ? "Remarcação" : "Cancelamento";
     var sugestao = (s.tipo==="remarcar" && s.dataSugerida)
       ? '<div class="solic-linha"><b>Horário pedido:</b> '+fmtDataBR(s.dataSugerida)+' · '+s.horaSugerida+'</div>' : '';
     var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+s.mensagem+'"</div>' : '';
+    var sugerir = s.tipo==="remarcar"
+      ? '<button class="btn sm" onclick="abrirSugerirHorario(\''+s.id+'\')">Sugerir horário</button>' : '';
     return '<div class="solic-card-pro">'+
-      '<div class="solic-card-top"><span class="solic-tag '+s.tipo+'">'+tipoLabel+'</span><span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span></div>'+
-      '<div class="solic-linha">Aula: '+aulaLabel(aula)+'</div>'+ sugestao + msg +
-      '<div class="solic-botoes">'+
-        '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+
+      '<div class="solic-card-top">'+tagTipo(s)+'<span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span></div>'+
+      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ sugestao + msg +
+      '<div class="solic-botoes">'+ waAlunoBtn(s) +
+        '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+ sugerir +
         '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>'+
       '</div></div>';
   }
+  function cardSolicContraproposta(s){
+    return '<div class="solic-card-pro">'+
+      '<div class="solic-card-top">'+tagTipo(s)+'<span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span><span class="solic-status aguardando">Aguardando o aluno</span></div>'+
+      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+
+      '<div class="solic-linha"><b>Você sugeriu:</b> '+fmtDataBR(s.contraData)+' · '+s.contraHora+'</div>'+
+      '<div class="solic-botoes">'+ waAlunoBtn(s) +'</div></div>';
+  }
   function cardSolicRespondida(s){
-    var aula = findAula(s.aulaId);
-    var tipoLabel = s.tipo==="remarcar" ? "Remarcação" : "Cancelamento";
+    var aplicado = s.status==="aprovada" && s.tipo==="remarcar" && s.contraData
+      ? '<div class="solic-linha">Remarcada para '+fmtDataBR(s.contraData)+' · '+s.contraHora+'</div>' : '';
     var badge = s.status==="aprovada" ? '<span class="solic-status ok">Aprovada</span>' : '<span class="solic-status no">Negada</span>';
     return '<div class="solic-card-pro respondida">'+
-      '<div class="solic-card-top"><span class="solic-tag '+s.tipo+'">'+tipoLabel+'</span><span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span>'+badge+'</div>'+
-      '<div class="solic-linha">Aula: '+aulaLabel(aula)+'</div></div>';
+      '<div class="solic-card-top">'+tagTipo(s)+'<span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span>'+badge+'</div>'+
+      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ aplicado +'</div>';
   }
   function renderSolicitacoes(){
     var pend = state.solicitacoes.filter(function(s){ return s.status==="em_analise"; });
-    var resp = state.solicitacoes.filter(function(s){ return s.status!=="em_analise"; });
+    var contra = state.solicitacoes.filter(function(s){ return s.status==="contraproposta"; });
+    var resp = state.solicitacoes.filter(function(s){ return s.status==="aprovada" || s.status==="negada"; });
     var badge = document.getElementById("solic-badge");
-    if (badge){ if (pend.length){ badge.textContent = pend.length; badge.hidden = false; } else { badge.hidden = true; } }
+    var nAgir = pend.length; // só as que pedem ação sua
+    if (badge){ if (nAgir){ badge.textContent = nAgir; badge.hidden = false; } else { badge.hidden = true; } }
     var elP = document.getElementById("solic-pendentes");
     var elR = document.getElementById("solic-respondidas");
     if (!elP) return;
-    elP.innerHTML = pend.length ? pend.map(cardSolicPendente).join("")
+    var htmlP = pend.length ? pend.map(cardSolicPendente).join("")
       : '<div class="hint" style="padding:8px 0;">Nenhuma solicitação pendente.</div>';
+    if (contra.length) htmlP += '<div class="section-title" style="margin-top:20px;">Aguardando o aluno</div>'+contra.map(cardSolicContraproposta).join("");
+    elP.innerHTML = htmlP;
     elR.innerHTML = resp.length ? ('<div class="section-title" style="margin-top:20px;">Respondidas</div>'+resp.map(cardSolicRespondida).join("")) : "";
   }
 
@@ -3440,6 +3459,32 @@ import './styles.css';
       mostrarToast(mensagemErroRemarcacao(err));
     });
   }
+
+  // Contraproposta: personal sugere outro horário -> status 'contraproposta'.
+  var sugerindoSolicId = null;
+  window.abrirSugerirHorario = function(id){
+    var s = findSolic(id); if (!s) return;
+    sugerindoSolicId = id;
+    var aula = findAula(s.aulaId);
+    document.getElementById("sug-data").value = s.dataSugerida || (aula ? aula.data : fmtData(new Date()));
+    document.getElementById("sug-hora").value = s.horaSugerida || (aula ? aula.hora : "07:00");
+    document.getElementById("sug-aluno").textContent = nomeAlunoSolic(s.alunoId);
+    abrirModal("modal-sugerir");
+  };
+  window.salvarSugestaoHorario = async function(ev){
+    if (ev) ev.preventDefault();
+    var id = sugerindoSolicId; if (!id) return;
+    var d = document.getElementById("sug-data").value, h = document.getElementById("sug-hora").value;
+    if (!d || !h){ mostrarToast("Informe a data e o horário."); return; }
+    var btn = document.getElementById("sug-submit"); if (btn) btn.disabled = true;
+    var r = await sb.from("solicitacoes").update({ status:"contraproposta", contra_data:d, contra_hora:h, respondida_em:new Date().toISOString() }).eq("id", id).select().maybeSingle();
+    if (btn) btn.disabled = false;
+    if (r.error){ console.error(r.error); mostrarToast("Não consegui enviar a sugestão."); return; }
+    var s = findSolic(id); if (s){ s.status="contraproposta"; s.contraData=d; s.contraHora=(h||"").slice(0,5); }
+    fecharModal("modal-sugerir");
+    renderSolicitacoes();
+    mostrarToast("Sugestão enviada ao aluno.");
+  };
 
   function renderAll(){
     renderResumo();

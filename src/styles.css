@@ -979,3 +979,9 @@
 .solic-linha b{color:var(--fg);}
 .solic-msg{font-style:italic;color:var(--fg);}
 .solic-botoes{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}
+
+/* Solicitações v2: WhatsApp + aguardando */
+.solic-wa{display:inline-flex;align-items:center;gap:5px;background:#25D366;color:#fff;border:none;margin-right:auto;text-decoration:none;}
+.solic-wa svg{width:15px;height:15px;}
+.solic-wa:hover{filter:brightness(.95);}
+.solic-status.aguardando{background:var(--warning-soft);color:var(--warning);}
