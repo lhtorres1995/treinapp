@@ -261,7 +261,8 @@ import './styles.css';
       valor: p.valor, referencia: p.referencia || null, periodo_label: p.periodoLabel || null,
       status: p.status, chave_referencia: p.chaveReferencia || null,
       mes_referencia: p.mesReferencia || null, data_vencimento: p.dataVencimento || null,
-      data_pagamento: p.dataPagamento || null, aula_ids: p.aulaIds || []
+      data_pagamento: p.dataPagamento || null, aula_ids: p.aulaIds || [],
+      pago_informado_em: p.pagoInformadoEm || null
     };
   }
   function rowToPagamento(r){
@@ -270,7 +271,8 @@ import './styles.css';
       referencia: r.referencia, periodoLabel: r.periodo_label,
       status: r.status, chaveReferencia: r.chave_referencia,
       mesReferencia: r.mes_referencia, dataVencimento: r.data_vencimento,
-      dataPagamento: r.data_pagamento, aulaIds: r.aula_ids || []
+      dataPagamento: r.data_pagamento, aulaIds: r.aula_ids || [],
+      pagoInformadoEm: r.pago_informado_em || null
     };
   }
 
@@ -2388,8 +2390,30 @@ import './styles.css';
       '<div class="pend-s">Já aconteceram e ainda não foram concluídas. Finalize por aqui, pelo check-out (QR) ou na agenda.</div></div></div>'+
       itens+extra+'</div>';
   }
+  // Cobranças que o aluno informou como pagas e aguardam confirmação.
+  function pagamentosInformados(){
+    return state.pagamentos.filter(function(p){ return p.pagoInformadoEm && p.status!=="pago"; })
+      .sort(function(a,b){ return (a.pagoInformadoEm < b.pagoInformadoEm) ? 1 : -1; });
+  }
+  function renderPagamentosInformados(){
+    var box = document.getElementById("resumo-pag-informados");
+    if (!box) return;
+    var infs = pagamentosInformados();
+    if (!infs.length){ box.innerHTML = ""; return; }
+    var itens = infs.slice(0,6).map(function(p){
+      var al = getAluno(p.alunoId);
+      var ref = p.periodoLabel || p.referencia || "Cobrança";
+      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+(al?al.nome:"Aluno")+' · '+fmtMoeda(p.valor)+'</div>'+
+        '<div class="pend-quando">'+ref+' · informado'+(p.pagoInformadoEm?" em "+fmtDataBR((""+p.pagoInformadoEm).slice(0,10)):"")+'</div></div>'+
+        '<button class="btn sm primary" onclick="marcarPago(\''+p.id+'\')">'+ICONS.check+' Confirmar</button></div>';
+    }).join("");
+    box.innerHTML = '<div class="pend-card pag-inf-card"><div class="pend-head"><span class="pend-ic pag-inf-ic">'+ICONS.cash+'</span>'+
+      '<div><div class="pend-t pag-inf-t">'+infs.length+' pagamento'+(infs.length>1?'s':'')+' aguardando confirmação</div>'+
+      '<div class="pend-s">O aluno informou que pagou. Confira no seu banco e confirme a baixa.</div></div></div>'+itens+'</div>';
+  }
   function renderResumo(){
     renderShell();
+    renderPagamentosInformados();
     renderPendentesConclusao();
     var hojeStr = fmtData(hoje);
     var aulasHoje = state.aulas.filter(function(c){return c.data===hojeStr;})
@@ -3410,8 +3434,9 @@ import './styles.css';
 
   function finStatusBadge(p){
     if (p.status==="pago") return '<span class="badge ok">recebido</span>';
-    if (ehVencido(p)) return '<span class="badge danger">vencido</span>';
-    return '<span class="badge warn">em aberto</span>';
+    var extra = (p.pagoInformadoEm && p.status!=="pago") ? ' <span class="badge info">pagamento informado</span>' : '';
+    if (ehVencido(p)) return '<span class="badge danger">vencido</span>'+extra;
+    return '<span class="badge warn">em aberto</span>'+extra;
   }
 
   function finAcoesRow(p){
