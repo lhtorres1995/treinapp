@@ -477,6 +477,33 @@
   </div>
 </div>
 
+<!-- MODAL SUGERIR HORÁRIO -->
+<div class="modal-overlay" id="modal-sugerir">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Sugerir outro horário</div>
+        <div class="modal-subtitle">Proponha uma data e hora para <span id="sug-aluno">o aluno</span>. Ele confirma no portal.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharModal('modal-sugerir')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <form id="form-sugerir" onsubmit="salvarSugestaoHorario(event)">
+      <div class="field-row">
+        <div class="field">
+          <label for="sug-data">Nova data</label>
+          <input id="sug-data" type="date" required>
+        </div>
+        <div class="field">
+          <label for="sug-hora">Novo horário</label>
+          <input id="sug-hora" type="time" required>
+        </div>
+      </div>
+      <button type="submit" class="btn primary block" id="sug-submit">Enviar sugestão ao aluno</button>
+    </form>
+  </div>
+</div>
+
 <!-- MODAL ALUNO -->
 <div class="modal-overlay" id="modal-aluno">
   <div class="modal-sheet lg">
