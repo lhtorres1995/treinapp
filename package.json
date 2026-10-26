@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
-    "html2pdf.js": "^0.10.1"
+    "html2pdf.js": "^0.10.1",
+    "html5-qrcode": "^2.3.8"
   },
   "devDependencies": {
     "vite": "^5.4.0"
