@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import html2pdf from 'html2pdf.js';
+import { Html5Qrcode } from 'html5-qrcode';
 import './styles.css';
 
 (function(){
@@ -219,7 +220,7 @@ import './styles.css';
       id: r.id, alunoId: r.aluno_id, data: r.data, hora: (r.hora||"").slice(0,5),
       status: r.status, remarcadaParaId: r.remarcada_para_id,
       faturada: !!r.faturada, valorFaturado: (r.valor_faturado===0 || r.valor_faturado) ? Number(r.valor_faturado) : null,
-      origem: r.origem || "manual"
+      origem: r.origem || "manual", checkinEm: r.checkin_em || null
     };
   }
   function disponibilidadeToRow(d){
@@ -2334,6 +2335,7 @@ import './styles.css';
   var SVG_CAL = '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   var SVG_PEOPLE = '<svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="2"/><path d="M3.5 19a5.5 5.5 0 0111 0M16 6a3 3 0 010 6M18.5 19a5 5 0 00-2.5-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   var SVG_DUMBBELL = '<svg viewBox="0 0 24 24" fill="none"><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  var SVG_QR = '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h3v3M21 14v7h-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   var dashCalMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
@@ -2557,9 +2559,9 @@ import './styles.css';
 
   function renderAcoes(containerId){
     var acoes = [
-      { ic: SVG_PEOPLE, cor:"teal", lab:"Novo aluno", fn:"abrirModalAluno()" },
-      { ic: SVG_CAL, cor:"violet", lab:"Nova aula", fn:"abrirModalAula()" },
-      { ic: SVG_BAG, cor:"amber", lab:"Financeiro", fn:"irParaTab('financeiro')" },
+      { ic: SVG_QR, cor:"teal", lab:"Check-in", fn:"abrirCheckinQR()" },
+      { ic: SVG_PEOPLE, cor:"violet", lab:"Novo aluno", fn:"abrirModalAluno()" },
+      { ic: SVG_CAL, cor:"amber", lab:"Nova aula", fn:"abrirModalAula()" },
       { ic: SVG_DUMBBELL, cor:"green", lab:"Agenda", fn:"irParaTab('agenda')" }
     ];
     var box = document.getElementById(containerId || "resumo-acoes");
@@ -2600,6 +2602,9 @@ import './styles.css';
     var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + aluno.nome;
     var html = '<div class="card">';
     html += '<div class="card-row"><div class="card-main"><div class="card-title">'+titulo+'</div><div class="card-sub">'+aluno.endereco+'</div></div>'+statusBadge(c.status)+'</div>';
+    if (c.checkinEm){
+      html += '<div class="checkin-chip">'+ICONS.check+' Check-in '+horaCheckin(c.checkinEm)+'</div>';
+    }
     if (c.status==="remarcada" && c.remarcadaParaId){
       var nova = null;
       state.aulas.forEach(function(x){ if (x.id===c.remarcadaParaId) nova = x; });
@@ -2621,6 +2626,86 @@ import './styles.css';
     html += '</div></div>';
     return html;
   }
+
+  // ---- Check-in por QR (o personal escaneia o QR do aluno) -----------------
+  function horaCheckin(iso){
+    try{ return new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}); }
+    catch(e){ return ""; }
+  }
+  var qrScanner = null, qrOcupado = false;
+  function resetCheckinUI(){
+    var res=document.getElementById("checkin-resultado");
+    var reader=document.getElementById("checkin-reader");
+    var btn=document.getElementById("checkin-reiniciar");
+    if(res){ res.hidden=true; res.innerHTML=""; }
+    if(reader) reader.hidden=false;
+    if(btn) btn.hidden=true;
+  }
+  function mostrarResultadoCheckin(d){
+    var res=document.getElementById("checkin-resultado");
+    var reader=document.getElementById("checkin-reader");
+    var btn=document.getElementById("checkin-reiniciar");
+    if(reader) reader.hidden=true;
+    if(btn) btn.hidden=false;
+    var cls, ic, titulo, sub;
+    if(d && d.ok && d.jafeito){
+      cls="aviso"; ic=ICONS.check; titulo=(d.aluno||"Aluno")+" já tinha check-in hoje";
+      sub="Aula das "+(d.hora||"--")+".";
+    } else if(d && d.ok){
+      cls="ok"; ic=ICONS.check; titulo="Check-in de "+(d.aluno||"aluno")+" registrado!";
+      sub="Aula das "+(d.hora||"--")+".";
+    } else {
+      cls="erro"; ic=ICONS.close||"!"; titulo=(d && d.titulo) ? d.titulo : "Não foi possível registrar";
+      sub=(d && d.erro) ? d.erro : "Tente novamente.";
+      if(d && d.aluno) sub=d.aluno+": "+sub;
+    }
+    if(res){
+      res.hidden=false;
+      res.innerHTML='<div class="checkin-res '+cls+'"><span class="checkin-res-ic">'+ic+'</span>'+
+        '<div><div class="checkin-res-t">'+titulo+'</div><div class="checkin-res-s">'+sub+'</div></div></div>';
+    }
+  }
+  async function iniciarScanner(){
+    try{
+      qrScanner = new Html5Qrcode("checkin-reader");
+      await qrScanner.start({ facingMode:"environment" }, { fps:10, qrbox:{width:230,height:230} }, onQrScan, function(){});
+    }catch(e){
+      console.error(e);
+      mostrarResultadoCheckin({ ok:false, titulo:"Câmera indisponível", erro:"Permita o acesso à câmera no navegador e tente de novo." });
+    }
+  }
+  async function pararScanner(){
+    if(qrScanner){ try{ await qrScanner.stop(); await qrScanner.clear(); }catch(e){} qrScanner=null; }
+  }
+  async function onQrScan(texto){
+    if(qrOcupado) return;
+    if(!texto || texto.indexOf("LT360CHECKIN:")!==0) return; // ignora QR estranho, segue lendo
+    qrOcupado = true;
+    await pararScanner();
+    var token = texto.slice("LT360CHECKIN:".length).trim();
+    await window.checkinProcessarToken(token);
+  }
+  // Processa um token de check-in: chama o RPC, mostra o resultado e atualiza a
+  // presença localmente. Exposto para desacoplar da câmera (e permitir testes).
+  window.checkinProcessarToken = async function(token){
+    try{
+      var r = await sb.rpc("checkin_por_token", { p_token: token });
+      if(r.error){ mostrarResultadoCheckin({ ok:false, erro:(r.error.message||"Erro ao registrar.") }); return; }
+      mostrarResultadoCheckin(r.data);
+      if(r.data && r.data.ok && r.data.aula_id){
+        var a=null; state.aulas.forEach(function(x){ if(x.id===r.data.aula_id) a=x; });
+        if(a){ a.checkinEm = new Date().toISOString(); renderAll(); }
+      }
+    }catch(e){ console.error(e); mostrarResultadoCheckin({ ok:false, erro:"Falha de conexão." }); }
+  };
+  window.abrirCheckinQR = async function(){
+    abrirModal("modal-checkin");
+    resetCheckinUI();
+    qrOcupado=false;
+    await iniciarScanner();
+  };
+  window.reiniciarCheckin = async function(){ qrOcupado=false; resetCheckinUI(); await iniciarScanner(); };
+  window.fecharCheckin = async function(){ await pararScanner(); fecharModal("modal-checkin"); };
 
   function proximaAulaDoAluno(alunoId){
     var hojeStr = fmtData(hoje);

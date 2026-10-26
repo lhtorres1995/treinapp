@@ -985,3 +985,25 @@
 .solic-wa svg{width:15px;height:15px;}
 .solic-wa:hover{filter:brightness(.95);}
 .solic-status.aguardando{background:var(--warning-soft);color:var(--warning);}
+
+/* ===================== Check-in por QR ===================== */
+.checkin-reader{width:100%;max-width:320px;margin:0 auto 10px;border-radius:var(--radius-sm);overflow:hidden;background:#000;}
+.checkin-reader video{width:100%!important;height:auto!important;display:block;}
+.checkin-resultado{margin-bottom:12px;}
+.checkin-res{display:flex;align-items:center;gap:12px;padding:16px;border-radius:var(--radius-sm);}
+.checkin-res-ic{width:40px;height:40px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:9px;color:#fff;}
+.checkin-res-ic svg{width:100%;height:100%;}
+.checkin-res-t{font-weight:700;font-size:15px;}
+.checkin-res-s{font-size:13px;color:var(--fg-muted);margin-top:2px;}
+.checkin-res.ok{background:var(--success-soft);}
+.checkin-res.ok .checkin-res-ic{background:var(--success);}
+.checkin-res.ok .checkin-res-t{color:var(--success);}
+.checkin-res.aviso{background:var(--warning-soft);}
+.checkin-res.aviso .checkin-res-ic{background:var(--warning);}
+.checkin-res.aviso .checkin-res-t{color:var(--warning);}
+.checkin-res.erro{background:var(--danger-soft);}
+.checkin-res.erro .checkin-res-ic{background:var(--danger);}
+.checkin-res.erro .checkin-res-t{color:var(--danger);}
+.checkin-chip{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;border-radius:999px;
+  background:var(--success-soft);color:var(--success);font-size:12px;font-weight:700;}
+.checkin-chip svg{width:14px;height:14px;}
