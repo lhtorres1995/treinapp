@@ -374,6 +374,23 @@
         <label for="f-perfil-pix">Chave Pix</label>
         <input id="f-perfil-pix" required placeholder="CPF, e-mail, telefone ou chave aleatória">
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-perfil-pix-tipo">Tipo da chave Pix</label>
+          <select id="f-perfil-pix-tipo">
+            <option value="">Selecione…</option>
+            <option value="telefone">Telefone</option>
+            <option value="email">E-mail</option>
+            <option value="cpf">CPF</option>
+            <option value="cnpj">CNPJ</option>
+            <option value="aleatoria">Chave aleatória</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-perfil-cidade">Cidade (para o Pix)</label>
+          <input id="f-perfil-cidade" placeholder="Ex.: São Paulo" maxlength="30">
+        </div>
+      </div>
       <div class="field">
         <label for="f-perfil-capacidade">Capacidade de alunos por horário</label>
         <input id="f-perfil-capacidade" type="number" min="1" step="1" required value="1">
