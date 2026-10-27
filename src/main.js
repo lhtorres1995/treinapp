@@ -3603,10 +3603,15 @@ import './styles.css';
     elR.innerHTML = resp.length ? ('<div class="section-title" style="margin-top:20px;">Respondidas</div>'+resp.map(cardSolicRespondida).join("")) : "";
   }
 
+  // Dispara o push "solicitação respondida" (não bloqueia a UI; falha é silenciosa).
+  function notificarAlunoSolic(id){
+    try{ sb.functions.invoke("enviar-push", { body:{ tipo:"solicitacao", solicitacao_id:id } }).catch(function(){}); }catch(e){}
+  }
   async function atualizarStatusSolic(id, status){
     var r = await sb.from("solicitacoes").update({ status: status, respondida_em: new Date().toISOString() }).eq("id", id).select().maybeSingle();
     if (r.error){ mostrarToast("Não consegui atualizar a solicitação."); throw r.error; }
     var s = findSolic(id); if (s){ s.status = status; }
+    notificarAlunoSolic(id);
     renderSolicitacoes();
   }
   window.recusarSolicitacao = function(id){
@@ -3673,6 +3678,7 @@ import './styles.css';
     if (btn) btn.disabled = false;
     if (r.error){ console.error(r.error); mostrarToast("Não consegui enviar a sugestão."); return; }
     var s = findSolic(id); if (s){ s.status="contraproposta"; s.contraData=d; s.contraHora=(h||"").slice(0,5); }
+    notificarAlunoSolic(id);
     fecharModal("modal-sugerir");
     renderSolicitacoes();
     mostrarToast("Sugestão enviada ao aluno.");
