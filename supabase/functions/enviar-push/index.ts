@@ -1,19 +1,17 @@
 // Edge Function: enviar-push
-// NÃO IMPLANTADA ainda — precisa ser deployada manualmente
-// (supabase functions deploy enviar-push) e precisa dos segredos abaixo
-// configurados no painel (Supabase > Edge Functions > Secrets):
+// NÃO IMPLANTADA automaticamente — deploy manual (dashboard ou
+// "supabase functions deploy enviar-push"). Secrets necessários:
+//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:...)
+//   SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY vêm automáticos.
 //
-//   SUPABASE_URL               (automático no runtime)
-//   SUPABASE_SERVICE_ROLE_KEY  (automático no runtime)
-//   VAPID_PUBLIC_KEY           — chave pública VAPID (a mesma que fica no portal)
-//   VAPID_PRIVATE_KEY          — chave privada VAPID (NUNCA vai para o navegador)
-//   VAPID_SUBJECT              — ex.: mailto:contato@lt360.com.br
-//
-// Etapa 1: envia o push de "solicitação respondida". A estrutura já prevê os
-// tipos de tempo (aula/pagamento) da Etapa 2.
-//
-// Entrada (POST, autenticado com JWT do personal ou service role):
-//   { "tipo": "solicitacao", "solicitacao_id": "<uuid>" }
+// Tipos aceitos (POST JSON):
+//   { tipo:"solicitacao", solicitacao_id }            -> avisa o ALUNO (resposta)
+//   { tipo:"solicitacao_aberta", solicitacao_id }     -> avisa o PERSONAL
+//   { tipo:"pagamento_informado", pagamento_id }      -> avisa o PERSONAL
+//   { tipo:"contraproposta_respondida", solicitacao_id, aceitar } -> avisa o PERSONAL
+//   { tipo:"pagamento_confirmado", pagamento_id }      -> avisa o ALUNO
+//   { tipo:"aula_remarcada", aula_id }                 -> avisa o ALUNO
+//   { tipo:"aula_cancelada", aula_id }                 -> avisa o ALUNO
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
@@ -31,82 +29,101 @@ const corsHeaders = {
 };
 
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
-
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+function fmtData(iso: string) { const p = (iso || "").split("-"); return p.length === 3 ? `${p[2]}/${p[1]}` : iso; }
+function hhmm(h: string) { return (h || "").slice(0, 5); }
 
-// Envia um payload para todas as assinaturas de um aluno; limpa as expiradas.
-async function enviarParaAluno(alunoId: string, payload: Record<string, unknown>) {
+async function enviar(col: "aluno_id" | "professor_id", ownerId: string, payload: Record<string, unknown>) {
   const { data: subs, error } = await admin
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth")
-    .eq("aluno_id", alunoId);
+    .from("push_subscriptions").select("endpoint, p256dh, auth").eq(col, ownerId);
   if (error) throw error;
   if (!subs || !subs.length) return { enviados: 0 };
-
   let enviados = 0;
   for (const s of subs) {
     try {
-      await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify(payload),
-      );
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload));
       enviados++;
     } catch (err) {
       const code = (err && (err as { statusCode?: number }).statusCode) || 0;
-      // 404/410 = assinatura expirada/cancelada -> remove
-      if (code === 404 || code === 410) {
-        await admin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
-      } else {
-        console.error("push falhou:", code, (err as Error)?.message);
-      }
+      if (code === 404 || code === 410) await admin.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
+      else console.error("push falhou:", code, (err as Error)?.message);
     }
   }
   return { enviados };
 }
 
-function payloadSolicitacao(status: string) {
-  if (status === "aprovada") {
-    return { title: "Solicitação aprovada ✅", body: "Seu personal aprovou sua solicitação.", url: "/" };
-  }
-  if (status === "negada") {
-    return { title: "Solicitação respondida", body: "Seu personal respondeu sua solicitação.", url: "/" };
-  }
-  if (status === "contraproposta") {
-    return { title: "Novo horário sugerido", body: "Seu personal sugeriu um horário. Toque para responder.", url: "/" };
-  }
-  return null;
+async function nomeAluno(id: string): Promise<string> {
+  const { data } = await admin.from("alunos").select("nome").eq("id", id).maybeSingle();
+  return (data?.nome as string) || "Seu aluno";
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ ok: false, erro: "Método não permitido." }, 405);
 
-  let body: { tipo?: string; solicitacao_id?: string };
-  try { body = await req.json(); } catch { return json({ ok: false, erro: "JSON inválido." }, 400); }
+  let b: Record<string, unknown>;
+  try { b = await req.json(); } catch { return json({ ok: false, erro: "JSON inválido." }, 400); }
+  const tipo = b.tipo as string;
 
   try {
-    if (body.tipo === "solicitacao" && body.solicitacao_id) {
-      const { data: solic, error } = await admin
-        .from("solicitacoes")
-        .select("aluno_id, status")
-        .eq("id", body.solicitacao_id)
-        .maybeSingle();
-      if (error) throw error;
-      if (!solic) return json({ ok: false, erro: "Solicitação não encontrada." }, 404);
+    // ---- Avisos para o ALUNO -------------------------------------------------
+    if (tipo === "solicitacao" || tipo === "pagamento_confirmado" || tipo === "aula_remarcada" || tipo === "aula_cancelada") {
+      let alunoId = "", payload: Record<string, unknown> | null = null;
 
-      const payload = payloadSolicitacao(solic.status);
-      if (!payload) return json({ ok: true, enviados: 0, nota: "status sem notificação" });
+      if (tipo === "solicitacao") {
+        const { data: s } = await admin.from("solicitacoes").select("aluno_id, status").eq("id", b.solicitacao_id as string).maybeSingle();
+        if (!s) return json({ ok: false, erro: "Solicitação não encontrada." }, 404);
+        alunoId = s.aluno_id;
+        if (s.status === "aprovada") payload = { title: "Solicitação aprovada ✅", body: "Seu personal aprovou sua solicitação.", url: "/" };
+        else if (s.status === "negada") payload = { title: "Solicitação respondida", body: "Seu personal respondeu sua solicitação.", url: "/" };
+        else if (s.status === "contraproposta") payload = { title: "Novo horário sugerido", body: "Seu personal sugeriu um horário. Toque para responder.", url: "/" };
+      } else if (tipo === "pagamento_confirmado") {
+        const { data: p } = await admin.from("pagamentos").select("aluno_id, periodo_label, referencia").eq("id", b.pagamento_id as string).maybeSingle();
+        if (!p) return json({ ok: false, erro: "Pagamento não encontrado." }, 404);
+        alunoId = p.aluno_id;
+        payload = { title: "Pagamento confirmado ✅", body: `Seu pagamento de ${p.periodo_label || p.referencia || "cobrança"} foi confirmado.`, url: "/" };
+      } else if (tipo === "aula_remarcada" || tipo === "aula_cancelada") {
+        const { data: a } = await admin.from("aulas").select("aluno_id, data, hora").eq("id", b.aula_id as string).maybeSingle();
+        if (!a) return json({ ok: false, erro: "Aula não encontrada." }, 404);
+        alunoId = a.aluno_id;
+        payload = tipo === "aula_remarcada"
+          ? { title: "Aula remarcada", body: `Sua aula foi remarcada para ${fmtData(a.data)} às ${hhmm(a.hora)}.`, url: "/" }
+          : { title: "Aula cancelada", body: `Sua aula de ${fmtData(a.data)} às ${hhmm(a.hora)} foi cancelada.`, url: "/" };
+      }
 
-      const r = await enviarParaAluno(solic.aluno_id, payload);
-      return json({ ok: true, ...r });
+      if (!payload) return json({ ok: true, enviados: 0, nota: "sem notificação para este estado" });
+      return json({ ok: true, ...(await enviar("aluno_id", alunoId, payload)) });
     }
+
+    // ---- Avisos para o PERSONAL ---------------------------------------------
+    if (tipo === "solicitacao_aberta" || tipo === "contraproposta_respondida") {
+      const { data: s } = await admin.from("solicitacoes").select("professor_id, aluno_id, tipo").eq("id", b.solicitacao_id as string).maybeSingle();
+      if (!s) return json({ ok: false, erro: "Solicitação não encontrada." }, 404);
+      const nome = await nomeAluno(s.aluno_id);
+      let payload: Record<string, unknown>;
+      if (tipo === "solicitacao_aberta") {
+        const oque = s.tipo === "remarcar" ? "remarcação" : "cancelamento";
+        payload = { title: "Nova solicitação", body: `${nome} abriu uma solicitação de ${oque}.`, url: "/" };
+      } else {
+        payload = b.aceitar
+          ? { title: "Horário aceito ✅", body: `${nome} aceitou o horário que você sugeriu.`, url: "/" }
+          : { title: "Horário recusado", body: `${nome} recusou o horário que você sugeriu.`, url: "/" };
+      }
+      return json({ ok: true, ...(await enviar("professor_id", s.professor_id, payload)) });
+    }
+
+    if (tipo === "pagamento_informado") {
+      const { data: p } = await admin.from("pagamentos").select("professor_id, aluno_id, periodo_label, referencia").eq("id", b.pagamento_id as string).maybeSingle();
+      if (!p) return json({ ok: false, erro: "Pagamento não encontrado." }, 404);
+      const nome = await nomeAluno(p.aluno_id);
+      const payload = { title: "Pagamento sinalizado", body: `${nome} sinalizou o pagamento de ${p.periodo_label || p.referencia || "uma cobrança"}.`, url: "/" };
+      return json({ ok: true, ...(await enviar("professor_id", p.professor_id, payload)) });
+    }
+
     return json({ ok: false, erro: "tipo inválido." }, 400);
   } catch (err) {
     console.error(err);
