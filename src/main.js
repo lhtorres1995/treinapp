@@ -97,6 +97,12 @@ import './styles.css';
     var partes = nome.trim().split(/\s+/);
     return (partes[0][0] + (partes[1] ? partes[1][0] : "")).toUpperCase();
   }
+  // Avatar do aluno: foto (se houver) ou iniciais. style é opcional (inline).
+  function avatarAluno(al, style){
+    var st = style ? ' style="'+style+'"' : '';
+    if (al && al.fotoUrl) return '<div class="avatar"'+st+'><img class="avatar-img" src="'+al.fotoUrl+'" alt=""></div>';
+    return '<div class="avatar"'+st+'>'+iniciais(al ? al.nome : "")+'</div>';
+  }
   function mapsLink(end){ return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(end); }
   function wazeLink(end){ return "https://waze.com/ul?q=" + encodeURIComponent(end) + "&navigate=yes"; }
 
@@ -204,7 +210,8 @@ import './styles.css';
       recorrencia: { horarios: r.recorrencia_horarios || {} },
       ativo: r.ativo !== false,
       dataCadastro: r.created_at || null,
-      checkinToken: r.checkin_token || null
+      checkinToken: r.checkin_token || null,
+      fotoUrl: r.foto_url || null
     };
   }
   function aulaToRow(c){
@@ -2155,7 +2162,7 @@ import './styles.css';
     html += '<button class="back-btn" onclick="voltarListaAlunos()">'+ICONS.chevL+' Alunos</button>';
     html += '<div class="student-detail-header">';
     html += '<div class="student-detail-id">';
-    html += '<div class="avatar">'+iniciais(aluno.nome)+'</div>';
+    html += avatarAluno(aluno);
     html += '<div><div class="card-title" style="font-size:16px;">'+aluno.nome+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
     html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
@@ -2465,7 +2472,7 @@ import './styles.css';
       .slice(0,5);
     document.getElementById("resumo-proximas").innerHTML = proximas.length ? proximas.map(function(c){
       var aluno = getAluno(c.alunoId);
-      return '<div class="aula-row"><div class="avatar">'+iniciais(aluno.nome)+'</div>'
+      return '<div class="aula-row">'+avatarAluno(aluno)
         + '<div class="aula-row-main"><div class="aula-row-nome">'+aluno.nome+'</div>'
         + '<div class="aula-row-sub">'+fmtDataBR(c.data)+' · '+c.hora+'</div></div>'
         + statusBadge(c.status) + '</div>';
@@ -2902,7 +2909,7 @@ import './styles.css';
         var prox = proximaAulaDoAluno(a.id);
         var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : '<span class="card-sub">Nenhuma agendada</span>';
         return '<tr onclick="abrirDetalheAluno(\''+a.id+'\')">'
-          + '<td><div class="card-row" style="justify-content:flex-start;gap:10px;"><div class="avatar" style="width:34px;height:34px;font-size:12px;">'+iniciais(a.nome)+'</div>'
+          + '<td><div class="card-row" style="justify-content:flex-start;gap:10px;">'+avatarAluno(a,'width:34px;height:34px;font-size:12px;')
           +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+(idadeLabel(a.nascimento)||"&mdash;")+'</div></div></div></td>'
           + '<td>'+(a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</td>'
           + '<td><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span></td>'
@@ -2920,7 +2927,7 @@ import './styles.css';
         var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : 'Nenhuma aula agendada';
         return '<div class="card" onclick="abrirDetalheAluno(\''+a.id+'\')" style="cursor:pointer;">'
           + '<div class="card-row"><div class="card-main" style="display:flex;align-items:center;gap:10px;">'
-          +   '<div class="avatar" style="width:34px;height:34px;font-size:12.5px;">'+iniciais(a.nome)+'</div>'
+          +   avatarAluno(a,'width:34px;height:34px;font-size:12.5px;')
           +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+[idadeLabel(a.nascimento), a.telefone].filter(Boolean).join(" · ")+'</div></div></div>'
           + (a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')
           + '</div>'
@@ -3152,7 +3159,7 @@ import './styles.css';
     if (!aulas.length){ box.innerHTML = '<div class="empty-state sm">Nenhuma aula hoje.</div>'; return; }
     box.innerHTML = aulas.map(function(c){
       var al = getAluno(c.alunoId);
-      return '<div class="aula-row" style="cursor:pointer;" onclick="abrirAulaDaGrade(\''+c.id+'\')"><div class="avatar">'+iniciais(al.nome)+'</div>'
+      return '<div class="aula-row" style="cursor:pointer;" onclick="abrirAulaDaGrade(\''+c.id+'\')">'+avatarAluno(al)
         + '<div class="aula-row-main"><div class="aula-row-nome">'+al.nome+'</div><div class="aula-row-sub">'+c.hora+' · Aula de Personal</div></div>'
         + statusBadge(c.status) + '</div>';
     }).join("");
