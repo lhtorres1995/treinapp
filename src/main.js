@@ -97,10 +97,13 @@ import './styles.css';
     var partes = nome.trim().split(/\s+/);
     return (partes[0][0] + (partes[1] ? partes[1][0] : "")).toUpperCase();
   }
+  // Escapa dados de usuário antes de inserir no HTML (proteção contra XSS).
+  var ESC_MAP={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return ESC_MAP[c];}); }
   // Avatar do aluno: foto (se houver) ou iniciais. style é opcional (inline).
   function avatarAluno(al, style){
     var st = style ? ' style="'+style+'"' : '';
-    if (al && al.fotoUrl) return '<div class="avatar"'+st+'><img class="avatar-img" src="'+al.fotoUrl+'" alt=""></div>';
+    if (al && al.fotoUrl) return '<div class="avatar"'+st+'><img class="avatar-img" src="'+esc(al.fotoUrl)+'" alt=""></div>';
     return '<div class="avatar"'+st+'>'+iniciais(al ? al.nome : "")+'</div>';
   }
   function mapsLink(end){ return "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(end); }
@@ -994,7 +997,7 @@ import './styles.css';
     document.getElementById("modal-aula-titulo").textContent = "Nova aula";
     var sel = document.getElementById("fa-aluno");
     sel.innerHTML = state.alunos.filter(function(a){return a.ativo;}).map(function(a){
-      return '<option value="'+a.id+'">'+a.nome+'</option>';
+      return '<option value="'+a.id+'">'+esc(a.nome)+'</option>';
     }).join("");
     document.getElementById("fa-data").value = fmtData(agendaData);
     document.getElementById("fa-hora").value = "07:00";
@@ -1030,7 +1033,7 @@ import './styles.css';
     document.getElementById("modal-aula-titulo").textContent = "Remarcar aula";
     var sel = document.getElementById("fa-aluno");
     sel.innerHTML = state.alunos.filter(function(a){return a.ativo;}).map(function(a){
-      return '<option value="'+a.id+'">'+a.nome+'</option>';
+      return '<option value="'+a.id+'">'+esc(a.nome)+'</option>';
     }).join("");
     sel.value = aulaOriginal.alunoId;
     var novaData = new Date(aulaOriginal.data+"T00:00:00");
@@ -1750,7 +1753,7 @@ import './styles.css';
     var preview = document.getElementById("perfil-logo-preview");
     var btnRemover = document.getElementById("btn-remover-logo");
     if (state.professor.logo){
-      preview.innerHTML = '<img src="'+state.professor.logo+'" alt="Logo">';
+      preview.innerHTML = '<img src="'+esc(state.professor.logo)+'" alt="Logo">';
       btnRemover.hidden = false;
     } else {
       preview.textContent = "Sem logo";
@@ -2002,7 +2005,7 @@ import './styles.css';
     var pago = p.status === "pago";
 
     var logoHtml = prof.logo
-      ? '<img class="recibo-logo" src="'+prof.logo+'" alt="Logo">'
+      ? '<img class="recibo-logo" src="'+esc(prof.logo)+'" alt="Logo">'
       : '<div class="recibo-logo-placeholder">'+iniciais(prof.nome||"PT")+'</div>';
 
     var aulasDoRecibo = (p.aulaIds && p.aulaIds.length)
@@ -2018,7 +2021,7 @@ import './styles.css';
         itensHtml += '<div class="recibo-item"><span class="recibo-item-dia">'+diaSemana+' · '+fmtDataBR(c.data)+' · '+c.hora+'</span>'+(valorUnit!==null ? ('<span>'+fmtMoeda(valorUnit)+'</span>') : '')+'</div>';
       });
     } else {
-      itensHtml += '<div class="recibo-item"><span class="recibo-item-dia">'+p.referencia+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
+      itensHtml += '<div class="recibo-item"><span class="recibo-item-dia">'+esc(p.referencia)+'</span><span>'+fmtMoeda(p.valor)+'</span></div>';
     }
 
     var dataLinha = pago
@@ -2033,11 +2036,11 @@ import './styles.css';
     html += '<div class="recibo-top-grid">';
     html += '<div class="recibo-prof-row">'+logoHtml+
       '<div class="recibo-prof-info"><div class="recibo-prof-label">Personal Trainer</div>'+
-      '<div class="recibo-prof-nome">'+(prof.nome||"Personal Trainer")+'</div>'+
-      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+prof.telefone) : "", prof.pix ? ("Pix: "+prof.pix) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
+      '<div class="recibo-prof-nome">'+esc(prof.nome||"Personal Trainer")+'</div>'+
+      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+esc(prof.telefone)) : "", prof.pix ? ("Pix: "+esc(prof.pix)) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
     html += '<div class="recibo-info-grid">'+
-      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+aluno.nome+'</span></div></div>'+
-      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Referente a</span><span class="recibo-info-valor">'+p.referencia+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+esc(aluno.nome)+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Referente a</span><span class="recibo-info-valor">'+esc(p.referencia)+'</span></div></div>'+
       dataLinha+
       '</div>';
     html += '</div>';
@@ -2163,7 +2166,7 @@ import './styles.css';
     html += '<div class="student-detail-header">';
     html += '<div class="student-detail-id">';
     html += avatarAluno(aluno);
-    html += '<div><div class="card-title" style="font-size:16px;">'+aluno.nome+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
+    html += '<div><div class="card-title" style="font-size:16px;">'+esc(aluno.nome)+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
     html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
     html += '<button class="btn sm" onclick="abrirModalAluno(\''+aluno.id+'\')">'+ICONS.edit+' Editar</button>';
@@ -2191,7 +2194,7 @@ import './styles.css';
 
     html += '<div class="card" style="margin-top:8px;">';
     html += '<div class="card-row"><span class="card-sub">Telefone</span><span>'+aluno.telefone+'</span></div>';
-    html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Endereço</span><span style="text-align:right;max-width:60%;">'+aluno.endereco+'</span></div>';
+    html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Endereço</span><span style="text-align:right;max-width:60%;">'+esc(aluno.endereco)+'</span></div>';
     var diasFixos = aluno.recorrencia && aluno.recorrencia.horarios ? Object.keys(aluno.recorrencia.horarios).length : 0;
     var freqTexto = diasFixos > 0 ? diasFixos+"x/semana" : "sem dia fixo";
     html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Plano</span><span class="badge accent">'+planoLabel+' · '+freqTexto+'</span></div>';
@@ -2224,7 +2227,7 @@ import './styles.css';
       html += '<div class="empty-state"><div class="display">Sem lançamentos</div></div>';
     } else {
       pagamentosDoAluno.forEach(function(p){
-        html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtMoeda(p.valor)+'</div><div class="card-sub">'+p.referencia+'</div></div>';
+        html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtMoeda(p.valor)+'</div><div class="card-sub">'+esc(p.referencia)+'</div></div>';
         html += p.status==="pago" ? '<span class="badge ok">'+ICONS.check+' pago</span>' : (ehVencido(p) ? '<span class="badge danger">vencido</span>' : '<span class="badge warn">pendente</span>');
         html += '</div>';
         html += '<div class="action-row"><button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' '+(p.status==="pago"?"Ver recibo":"Ver cobrança")+'</button></div>';
@@ -2387,7 +2390,7 @@ import './styles.css';
     var itens = pend.slice(0, 6).map(function(c){
       var al = getAluno(c.alunoId);
       var quando = (c.data===hojeStr ? "Hoje" : fmtDataBR(c.data).slice(0,5)) + " · " + c.hora;
-      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+(al?al.nome:"Aluno")+'</div>'+
+      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+esc(al?al.nome:"Aluno")+'</div>'+
         '<div class="pend-quando">'+quando+'</div></div>'+
         '<button class="btn sm primary" onclick="confirmarConcluir(\''+c.id+'\')">'+ICONS.check+' Concluir</button></div>';
     }).join("");
@@ -2410,8 +2413,8 @@ import './styles.css';
     var itens = infs.slice(0,6).map(function(p){
       var al = getAluno(p.alunoId);
       var ref = p.periodoLabel || p.referencia || "Cobrança";
-      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+(al?al.nome:"Aluno")+' · '+fmtMoeda(p.valor)+'</div>'+
-        '<div class="pend-quando">'+ref+' · informado'+(p.pagoInformadoEm?" em "+fmtDataBR((""+p.pagoInformadoEm).slice(0,10)):"")+'</div></div>'+
+      return '<div class="pend-row"><div class="pend-info"><div class="pend-nome">'+esc(al?al.nome:"Aluno")+' · '+fmtMoeda(p.valor)+'</div>'+
+        '<div class="pend-quando">'+esc(ref)+' · informado'+(p.pagoInformadoEm?" em "+fmtDataBR((""+p.pagoInformadoEm).slice(0,10)):"")+'</div></div>'+
         '<button class="btn sm primary" onclick="marcarPago(\''+p.id+'\')">'+ICONS.check+' Confirmar</button></div>';
     }).join("");
     box.innerHTML = '<div class="pend-card pag-inf-card"><div class="pend-head"><span class="pend-ic pag-inf-ic">'+ICONS.cash+'</span>'+
@@ -2440,7 +2443,7 @@ import './styles.css';
         + '<div class="dash-hero-top"><div><div class="dash-hero-label">Seu próximo atendimento</div>'
         +   '<div class="dash-hero-time">'+alvo.hora+'</div></div>'
         +   '<span class="dash-hero-badge">'+heroStatusLabel(alvo.status)+'</span></div>'
-        + '<div class="dash-hero-aluno">'+al.nome+'</div>'
+        + '<div class="dash-hero-aluno">'+esc(al.nome)+'</div>'
         + '<div class="dash-hero-end">'+al.endereco+'</div>'
         + '<div class="dash-hero-actions">'
         +   '<a class="hero-btn" href="'+mapsLink(al.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Maps</a>'
@@ -2473,7 +2476,7 @@ import './styles.css';
     document.getElementById("resumo-proximas").innerHTML = proximas.length ? proximas.map(function(c){
       var aluno = getAluno(c.alunoId);
       return '<div class="aula-row">'+avatarAluno(aluno)
-        + '<div class="aula-row-main"><div class="aula-row-nome">'+aluno.nome+'</div>'
+        + '<div class="aula-row-main"><div class="aula-row-nome">'+esc(aluno.nome)+'</div>'
         + '<div class="aula-row-sub">'+fmtDataBR(c.data)+' · '+c.hora+'</div></div>'
         + statusBadge(c.status) + '</div>';
     }).join("") : '<div class="empty-state sm">Nenhuma aula futura agendada.</div>';
@@ -2641,11 +2644,11 @@ import './styles.css';
     var items = [];
     state.aulas.filter(function(c){return c.status==="concluida";}).forEach(function(c){
       var al = getAluno(c.alunoId);
-      items.push({ data:c.data, ordem:c.data+c.hora, cls:"ok", ic:ICONS.check, t:"Aula concluída", s:(al?al.nome:"")+" · "+fmtDataBR(c.data) });
+      items.push({ data:c.data, ordem:c.data+c.hora, cls:"ok", ic:ICONS.check, t:"Aula concluída", s:(al?esc(al.nome):"")+" · "+fmtDataBR(c.data) });
     });
     state.pagamentos.filter(function(p){return p.status==="pago" && p.dataPagamento;}).forEach(function(p){
       var al = getAluno(p.alunoId);
-      items.push({ data:p.dataPagamento, ordem:p.dataPagamento+"z", cls:"teal", ic:ICONS.cash, t:"Pagamento recebido", s:(al?al.nome:"")+" · "+fmtMoeda(p.valor) });
+      items.push({ data:p.dataPagamento, ordem:p.dataPagamento+"z", cls:"teal", ic:ICONS.cash, t:"Pagamento recebido", s:(al?esc(al.nome):"")+" · "+fmtMoeda(p.valor) });
     });
     items.sort(function(a,b){ return a.ordem < b.ordem ? 1 : -1; });
     items = items.slice(0,6);
@@ -2665,9 +2668,9 @@ import './styles.css';
   };
 
   function cardAula(c, aluno, mostrarData){
-    var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + aluno.nome;
+    var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + esc(aluno.nome);
     var html = '<div class="card">';
-    html += '<div class="card-row"><div class="card-main"><div class="card-title">'+titulo+'</div><div class="card-sub">'+aluno.endereco+'</div></div>'+statusBadge(c.status)+'</div>';
+    html += '<div class="card-row"><div class="card-main"><div class="card-title">'+titulo+'</div><div class="card-sub">'+esc(aluno.endereco)+'</div></div>'+statusBadge(c.status)+'</div>';
     if (c.checkinOrigem==="checkout"){
       html += '<div class="checkin-chip">'+ICONS.check+' Concluída via check-out'+(c.checkinEm?' · '+horaCheckin(c.checkinEm):'')+'</div>';
     } else if (c.checkinEm){
@@ -2720,7 +2723,7 @@ import './styles.css';
     if(res){
       res.hidden=false;
       res.innerHTML='<div class="checkin-res '+cls+'"><span class="checkin-res-ic">'+ic+'</span>'+
-        '<div><div class="checkin-res-t">'+titulo+'</div><div class="checkin-res-s">'+(sub||"")+'</div></div></div>';
+        '<div><div class="checkin-res-t">'+esc(titulo)+'</div><div class="checkin-res-s">'+esc(sub||"")+'</div></div></div>';
     }
   }
   async function iniciarScanner(){
@@ -2777,11 +2780,11 @@ import './styles.css';
     var html;
     if(candidatas.length===1){
       var c=candidatas[0];
-      html='<div class="checkin-confirm"><div class="checkin-confirm-t">Finalizar a aula de '+aluno.nome+'?</div>'+
+      html='<div class="checkin-confirm"><div class="checkin-confirm-t">Finalizar a aula de '+esc(aluno.nome)+'?</div>'+
         '<div class="checkin-confirm-s">Aula das '+c.hora+' · '+fmtDataBR(c.data)+'. Se ele paga por aula, isso já gera a cobrança.</div>'+
         '<button class="btn primary block" onclick="checkinFinalizar(\''+c.id+'\')">'+ICONS.check+' Finalizar aula</button></div>';
     } else {
-      html='<div class="checkin-confirm"><div class="checkin-confirm-t">'+aluno.nome+' tem mais de uma aula hoje</div>'+
+      html='<div class="checkin-confirm"><div class="checkin-confirm-t">'+esc(aluno.nome)+' tem mais de uma aula hoje</div>'+
         '<div class="checkin-confirm-s">Toque na sessão que você quer finalizar:</div>'+
         candidatas.map(function(c){
           return '<button class="btn block checkin-opt" onclick="checkinFinalizar(\''+c.id+'\')">'+ICONS.check+' Aula das '+c.hora+'</button>';
@@ -2910,7 +2913,7 @@ import './styles.css';
         var proxLabel = prox ? fmtDataBR(prox.data)+' · '+prox.hora : '<span class="card-sub">Nenhuma agendada</span>';
         return '<tr onclick="abrirDetalheAluno(\''+a.id+'\')">'
           + '<td><div class="card-row" style="justify-content:flex-start;gap:10px;">'+avatarAluno(a,'width:34px;height:34px;font-size:12px;')
-          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+(idadeLabel(a.nascimento)||"&mdash;")+'</div></div></div></td>'
+          +   '<div><div class="card-title">'+esc(a.nome)+'</div><div class="card-sub">'+(idadeLabel(a.nascimento)||"&mdash;")+'</div></div></div></td>'
           + '<td>'+(a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</td>'
           + '<td><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span></td>'
           + '<td>'+proxLabel+'</td>'
@@ -2928,7 +2931,7 @@ import './styles.css';
         return '<div class="card" onclick="abrirDetalheAluno(\''+a.id+'\')" style="cursor:pointer;">'
           + '<div class="card-row"><div class="card-main" style="display:flex;align-items:center;gap:10px;">'
           +   avatarAluno(a,'width:34px;height:34px;font-size:12.5px;')
-          +   '<div><div class="card-title">'+a.nome+'</div><div class="card-sub">'+[idadeLabel(a.nascimento), a.telefone].filter(Boolean).join(" · ")+'</div></div></div>'
+          +   '<div><div class="card-title">'+esc(a.nome)+'</div><div class="card-sub">'+[idadeLabel(a.nascimento), esc(a.telefone)].filter(Boolean).join(" · ")+'</div></div></div>'
           + (a.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')
           + '</div>'
           + '<div class="card-row" style="margin-top:8px;"><span class="badge accent">'+planoLabelMap[a.plano.tipo]+'</span><span class="card-sub">'+proxLabel+'</span></div>'
@@ -3160,7 +3163,7 @@ import './styles.css';
     box.innerHTML = aulas.map(function(c){
       var al = getAluno(c.alunoId);
       return '<div class="aula-row" style="cursor:pointer;" onclick="abrirAulaDaGrade(\''+c.id+'\')">'+avatarAluno(al)
-        + '<div class="aula-row-main"><div class="aula-row-nome">'+al.nome+'</div><div class="aula-row-sub">'+c.hora+' · Aula de Personal</div></div>'
+        + '<div class="aula-row-main"><div class="aula-row-nome">'+esc(al.nome)+'</div><div class="aula-row-sub">'+c.hora+' · Aula de Personal</div></div>'
         + statusBadge(c.status) + '</div>';
     }).join("");
   }
@@ -3195,7 +3198,7 @@ import './styles.css';
       return '<tr>'
         + '<td>'+fmtDataBR(c.data)+'</td>'
         + '<td>'+c.hora+'</td>'
-        + '<td>'+al.nome+'</td>'
+        + '<td>'+esc(al.nome)+'</td>'
         + '<td class="card-sub">'+al.endereco+'</td>'
         + '<td>'+statusBadge(c.status)+'</td>'
         + '<td class="alunos-acoes-col"><a class="icon-btn" href="'+mapsLink(al.endereco)+'" target="_blank" rel="noopener" title="Maps">'+ICONS.route+'</a><button class="icon-btn" title="Ver aula" onclick="abrirAulaDaGrade(\''+c.id+'\')">'+ICONS.eye+'</button></td></tr>';
@@ -3473,7 +3476,7 @@ import './styles.css';
       document.getElementById("fin-tabela-body").innerHTML = pagina.map(function(p){
         var aluno = getAluno(p.alunoId);
         var venc = p.dataVencimento ? fmtDataBR(p.dataVencimento) : "—";
-        return '<tr><td>'+venc+'</td><td>'+(aluno?aluno.nome:"—")+'</td><td>'+p.referencia+'</td><td>'+fmtMoeda(p.valor)+'</td><td>'+finStatusBadge(p)+'</td><td>'+finAcoesRow(p)+'</td></tr>';
+        return '<tr><td>'+venc+'</td><td>'+(aluno?esc(aluno.nome):"—")+'</td><td>'+esc(p.referencia)+'</td><td>'+fmtMoeda(p.valor)+'</td><td>'+finStatusBadge(p)+'</td><td>'+finAcoesRow(p)+'</td></tr>';
       }).join("");
 
       document.getElementById("fin-cards").innerHTML = pagina.map(function(p){
@@ -3481,7 +3484,7 @@ import './styles.css';
         // o valor fica em destaque à direita (não mais dentro do texto truncável do
         // subtítulo), para não ser cortado pelo "..." junto com a data de vencimento.
         var subLabel = p.referencia + (p.dataVencimento ? (' · vence ' + fmtDataBR(p.dataVencimento)) : '');
-        return '<div class="card fin-card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">'+subLabel+'</div></div>'
+        return '<div class="card fin-card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?esc(aluno.nome):"—")+'</div><div class="card-sub">'+subLabel+'</div></div>'
           + '<div class="fin-card-right"><div class="fin-card-valor">'+fmtMoeda(p.valor)+'</div>'+finStatusBadge(p)+'</div></div>'+finAcoesRow(p)+'</div>';
       }).join("");
     }
@@ -3504,12 +3507,12 @@ import './styles.css';
 
     document.getElementById("fin-proximos").innerHTML = proximos.length ? proximos.map(function(p){
       var aluno = getAluno(p.alunoId);
-      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">vence '+fmtDataBR(p.dataVencimento)+'</div></div><span class="badge neutral">'+fmtMoeda(p.valor)+'</span></div></div>';
+      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?esc(aluno.nome):"—")+'</div><div class="card-sub">vence '+fmtDataBR(p.dataVencimento)+'</div></div><span class="badge neutral">'+fmtMoeda(p.valor)+'</span></div></div>';
     }).join("") : '<div class="empty-state"><div class="display">Nada a vencer</div></div>';
 
     document.getElementById("fin-recentes").innerHTML = recentes.length ? recentes.map(function(p){
       var aluno = getAluno(p.alunoId);
-      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?aluno.nome:"—")+'</div><div class="card-sub">'+fmtDataBR(p.dataPagamento)+'</div></div><span class="badge ok">'+fmtMoeda(p.valor)+'</span></div></div>';
+      return '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+(aluno?esc(aluno.nome):"—")+'</div><div class="card-sub">'+fmtDataBR(p.dataPagamento)+'</div></div><span class="badge ok">'+fmtMoeda(p.valor)+'</span></div></div>';
     }).join("") : '<div class="empty-state"><div class="display">Sem recebimentos ainda</div></div>';
 
     document.getElementById("fin-acoes").innerHTML =
@@ -3521,7 +3524,7 @@ import './styles.css';
     var selFiltro = document.getElementById("fin-aluno-select");
     if (selFiltro && selFiltro.options.length <= 1){
       selFiltro.innerHTML = '<option value="todos">Todos os alunos</option>' + state.alunos.map(function(a){
-        return '<option value="'+a.id+'">'+a.nome+'</option>';
+        return '<option value="'+a.id+'">'+esc(a.nome)+'</option>';
       }).join("");
       selFiltro.value = finAlunoFiltro;
     }
@@ -3545,7 +3548,7 @@ import './styles.css';
     var d = new Date(aula.data+"T00:00:00");
     return capitalizar(DIAS[d.getDay()]) + ", " + fmtDataBR(aula.data) + " · " + aula.hora;
   }
-  function nomeAlunoSolic(id){ var a = getAluno(id); return a ? a.nome : "(aluno)"; }
+  function nomeAlunoSolic(id){ var a = getAluno(id); return esc(a ? a.nome : "(aluno)"); }
 
   function tagTipo(s){ return '<span class="solic-tag '+s.tipo+'">'+(s.tipo==="remarcar"?"Remarcação":"Cancelamento")+'</span>'; }
   function waAlunoBtn(s){
@@ -3557,7 +3560,7 @@ import './styles.css';
   function cardSolicPendente(s){
     var sugestao = (s.tipo==="remarcar" && s.dataSugerida)
       ? '<div class="solic-linha"><b>Horário pedido:</b> '+fmtDataBR(s.dataSugerida)+' · '+s.horaSugerida+'</div>' : '';
-    var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+s.mensagem+'"</div>' : '';
+    var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+esc(s.mensagem)+'"</div>' : '';
     var sugerir = s.tipo==="remarcar"
       ? '<button class="btn sm" onclick="abrirSugerirHorario(\''+s.id+'\')">Sugerir horário</button>' : '';
     return '<div class="solic-card-pro">'+
