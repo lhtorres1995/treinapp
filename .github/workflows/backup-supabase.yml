@@ -12,7 +12,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Gerar dump (pg_dump via Postgres 15, versão compatível)
+      - name: Gerar dump (pg_dump via Postgres 17, compatível com versões =<17)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -21,7 +21,7 @@ jobs:
             exit 1
           fi
           STAMP=$(date +%Y-%m-%d_%H%M)
-          docker run --rm -v "$PWD:/out" postgres:15 \
+          docker run --rm -v "$PWD:/out" postgres:17 \
             pg_dump "$SUPABASE_DB_URL" \
               --no-owner --no-privileges -Fc \
               -f "/out/lt360-backup-$STAMP.dump"
