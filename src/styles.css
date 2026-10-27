@@ -1035,3 +1035,8 @@
 /* Foto do aluno no avatar */
 .avatar{overflow:hidden;}
 .avatar-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit;}
+
+/* Notificações no perfil do personal */
+.perfil-notif-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.perfil-notif-on{display:inline-flex;align-items:center;gap:6px;color:var(--success);font-weight:700;font-size:13.5px;}
+.perfil-notif-on svg{width:16px;height:16px;}

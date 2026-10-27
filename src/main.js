@@ -1130,7 +1130,7 @@ import './styles.css';
     pedirConfirmacao("Concluir aula", "Confirma que essa aula foi dada? Se o aluno pagar por aula, isso já gera a cobrança.", "Concluir", function(){ concluirAula(id); });
   };
   window.confirmarCancelar = function(id){
-    pedirConfirmacao("Cancelar aula", "Tem certeza que quer cancelar essa aula? Essa ação pode ser desfeita remarcando depois.", "Cancelar aula", function(){ cancelarAula(id); });
+    pedirConfirmacao("Cancelar aula", "Tem certeza que quer cancelar essa aula? Essa ação pode ser desfeita remarcando depois.", "Cancelar aula", function(){ cancelarAula(id); invocarPush({ tipo:"aula_cancelada", aula_id:id }); });
   };
   window.confirmarEstornarConclusao = function(id){
     pedirConfirmacao("Estornar conclusão", "Isso volta a aula para agendada e desfaz a cobrança gerada por ela (se a cobrança já tiver sido paga, ela não é alterada). Tem certeza?", "Estornar", function(){ estornarConclusao(id); });
@@ -1149,6 +1149,7 @@ import './styles.css';
       // (o seletor de aluno do modal é ignorado na remarcação, por desenho).
       var idOriginal = remarcandoId;
       var btn = document.getElementById("modal-aula-submit");
+      var novaRemarcadaId = null;
       if (btn) btn.disabled = true;
       try {
         // A RPC + o alinhamento de estado/snapshot rodam DENTRO da fila, após
@@ -1163,6 +1164,7 @@ import './styles.css';
           }).then(function(r){
             if (r.error) throw r.error;
             var nova = rowToAula(r.data);
+            novaRemarcadaId = nova.id;
             if (!state.aulas.some(function(c){ return c.id===nova.id; })) state.aulas.push(nova);
             var origObj = null;
             state.aulas.forEach(function(c){
@@ -1174,6 +1176,7 @@ import './styles.css';
         });
         remarcandoId = null;
         if (btn) btn.disabled = false;
+        if (novaRemarcadaId) invocarPush({ tipo:"aula_remarcada", aula_id:novaRemarcadaId });
         fecharModal("modal-aula");
         renderAll();
         mostrarToast("Aula remarcada.");
@@ -1725,6 +1728,7 @@ import './styles.css';
     state.pagamentos.forEach(function(p){
       if (p.id===id){ p.status="pago"; p.dataPagamento = fmtData(hoje); }
     });
+    invocarPush({ tipo:"pagamento_confirmado", pagamento_id:id });
     salvarEstado(); renderAll();
     if (!document.getElementById("alunos-detalhe-view").hidden){
       var alunoId = null;
@@ -1770,6 +1774,7 @@ import './styles.css';
     document.getElementById("f-perfil-cidade").value = p.cidade || "";
     document.getElementById("f-perfil-capacidade").value = p.capacidadeSimultanea || 1;
     atualizarPreviewLogo();
+    if (window.renderNotifPersonal) renderNotifPersonal();
   }
 
   // ---------- disponibilidade e bloqueios (tela) ----------
@@ -3603,10 +3608,9 @@ import './styles.css';
     elR.innerHTML = resp.length ? ('<div class="section-title" style="margin-top:20px;">Respondidas</div>'+resp.map(cardSolicRespondida).join("")) : "";
   }
 
-  // Dispara o push "solicitação respondida" (não bloqueia a UI; falha é silenciosa).
-  function notificarAlunoSolic(id){
-    try{ sb.functions.invoke("enviar-push", { body:{ tipo:"solicitacao", solicitacao_id:id } }).catch(function(){}); }catch(e){}
-  }
+  // Dispara push via Edge Function (não bloqueia a UI; falha é silenciosa).
+  function invocarPush(body){ try{ sb.functions.invoke("enviar-push", { body: body }).catch(function(){}); }catch(e){} }
+  function notificarAlunoSolic(id){ invocarPush({ tipo:"solicitacao", solicitacao_id:id }); }
   async function atualizarStatusSolic(id, status){
     var r = await sb.from("solicitacoes").update({ status: status, respondida_em: new Date().toISOString() }).eq("id", id).select().maybeSingle();
     if (r.error){ mostrarToast("Não consegui atualizar a solicitação."); throw r.error; }
@@ -3706,4 +3710,60 @@ import './styles.css';
       });
     });
   }
+
+  /* ---------------- Push (notificações do personal) ---------------------- */
+  var VAPID_PUBLIC = "BKE_rvm-bWgqtyXo060a1aJCWl5MP8tTieToNbcGKUJbBuyKOIsftrnF5biHRsd9haNdP3FtMPp6a-bl_pICWco";
+  function pushSuportado(){ return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window); }
+  function b64ToUint8(b64){
+    var pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    var base64 = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64); var arr = new Uint8Array(raw.length);
+    for (var i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+    return arr;
+  }
+  async function estadoNotif(){
+    if(!pushSuportado()) return "indisponivel";
+    if(Notification.permission === "denied") return "bloqueado";
+    try{ var reg = await navigator.serviceWorker.ready; var sub = await reg.pushManager.getSubscription(); return sub ? "ativo" : "inativo"; }
+    catch(e){ return "inativo"; }
+  }
+  window.renderNotifPersonal = async function(){
+    var box = document.getElementById("perfil-notif");
+    if(!box) return;
+    var st = await estadoNotif();
+    if(st === "indisponivel"){
+      box.innerHTML = '<div class="hint">Este navegador não suporta notificações. No iPhone, instale o app na tela inicial.</div>';
+    } else if(st === "bloqueado"){
+      box.innerHTML = '<div class="hint">Notificações bloqueadas nas configurações do navegador para este site.</div>';
+    } else if(st === "ativo"){
+      box.innerHTML = '<div class="perfil-notif-row"><span class="perfil-notif-on">'+ICONS.check+' Ativadas neste aparelho</span>'+
+        '<button type="button" class="btn sm" onclick="desativarNotifPersonal()">Desativar</button></div>';
+    } else {
+      box.innerHTML = '<button type="button" class="btn primary" onclick="ativarNotifPersonal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;vertical-align:-3px;"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg> Ativar notificações</button>';
+    }
+  };
+  window.ativarNotifPersonal = async function(){
+    if(!pushSuportado()){ mostrarToast("Seu navegador não suporta notificações."); return; }
+    try{
+      var perm = await Notification.requestPermission();
+      if(perm !== "granted"){ mostrarToast("Permissão não concedida."); renderNotifPersonal(); return; }
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: b64ToUint8(VAPID_PUBLIC) });
+      var j = sub.toJSON();
+      var r = await sb.rpc("salvar_push_personal", { p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_ua: navigator.userAgent });
+      if(r.error) throw r.error;
+      mostrarToast("Notificações ativadas!");
+      renderNotifPersonal();
+    }catch(e){ console.error(e); mostrarToast("Não consegui ativar as notificações."); renderNotifPersonal(); }
+  };
+  window.desativarNotifPersonal = async function(){
+    try{
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if(sub){ try{ await sb.rpc("remover_push_personal", { p_endpoint: sub.endpoint }); }catch(_){} await sub.unsubscribe(); }
+      mostrarToast("Notificações desativadas.");
+      renderNotifPersonal();
+    }catch(e){ console.error(e); mostrarToast("Não consegui desativar."); renderNotifPersonal(); }
+  };
 })();
