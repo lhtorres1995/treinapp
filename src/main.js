@@ -2183,7 +2183,8 @@ import './styles.css';
 
     html += '<div class="action-row" style="margin-top:6px;">';
     if (aluno.authUserId){
-      html += '<span class="badge ok">'+ICONS.check+' Tem acesso ao portal</span>';
+      html += '<span class="badge ok">'+ICONS.check+' Convidado para o portal</span>';
+      html += '<button class="btn sm ghost" onclick="convidarAluno(\''+aluno.id+'\')" id="btn-convidar-'+aluno.id+'">Reenviar convite</button>';
     } else if (aluno.email){
       html += '<button class="btn sm ghost" onclick="convidarAluno(\''+aluno.id+'\')" id="btn-convidar-'+aluno.id+'">Convidar para o portal</button>';
     } else {
@@ -2317,6 +2318,8 @@ import './styles.css';
   window.convidarAluno = async function(id){
     var aluno = getAluno(id);
     if (!aluno) return;
+    var reenvio = !!aluno.authUserId;
+    var rotulo = reenvio ? "Reenviar convite" : "Convidar para o portal";
     var btn = document.getElementById("btn-convidar-"+id);
     if (btn){ btn.disabled = true; btn.textContent = "Enviando..."; }
     try {
@@ -2329,7 +2332,8 @@ import './styles.css';
       });
       if (r.error) throw r.error;
       if (r.data && r.data.error) throw new Error(r.data.error);
-      mostrarToast("Convite enviado para " + aluno.email + ".");
+      var foiReenvio = !!(r.data && r.data.reenviado);
+      mostrarToast((foiReenvio ? "Convite reenviado para " : "Convite enviado para ") + aluno.email + ".");
       // O auth_user_id só é confirmado no próximo carregamento (a Edge
       // Function grava direto no banco, não no estado local otimista).
       await carregarDadosDoServidor();
@@ -2337,9 +2341,17 @@ import './styles.css';
       abrirDetalheAluno(id);
     } catch(err){
       console.error(err);
+      // Mensagens de negócio (ex.: "já criou a senha") vêm no corpo da resposta
+      // da Edge Function, não no err.message genérico. Extrai quando possível.
       var msg = (err && err.message) || "Erro ao enviar o convite.";
+      try {
+        if (err && err.context && typeof err.context.json === "function") {
+          var corpo = await err.context.json();
+          if (corpo && corpo.error) msg = corpo.error;
+        }
+      } catch(e){}
       mostrarToast(msg);
-      if (btn){ btn.disabled = false; btn.textContent = "Convidar para o portal"; }
+      if (btn){ btn.disabled = false; btn.textContent = rotulo; }
     }
   };
 
