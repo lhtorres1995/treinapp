@@ -2435,6 +2435,7 @@ import './styles.css';
     if (excluida){
       html += '<button class="btn sm ghost" onclick="event.stopPropagation();restaurarAvaliacao(\''+av.id+'\')">Restaurar</button>';
     } else {
+      html += '<button class="btn sm ghost" onclick="event.stopPropagation();abrirRelatorioAvaliacao(\''+av.id+'\')" title="Gerar PDF para enviar ao aluno">'+ICONS.print+' PDF</button>';
       html += '<button class="btn sm" onclick="event.stopPropagation();abrirModalAvaliacao(\''+av.alunoId+'\',\''+av.id+'\')">'+ICONS.edit+' Editar</button>';
       html += '<button class="btn sm ghost" onclick="event.stopPropagation();confirmarExcluirAvaliacao(\''+av.id+'\')">Excluir</button>';
     }
@@ -2476,6 +2477,123 @@ import './styles.css';
     html += '</div>';
     return html;
   }
+  // ---------- relatório de avaliação física em PDF (mesmo padrão visual do recibo) ----------
+  var relatorioAvaliacaoAtualId = null;
+  window.abrirRelatorioAvaliacao = function(avaliacaoId){
+    var av = getAvaliacao(avaliacaoId);
+    if (!av) return;
+    relatorioAvaliacaoAtualId = avaliacaoId;
+
+    var aluno = getAluno(av.alunoId);
+    var prof = state.professor;
+    var itens = itensDaAvaliacao(av.id);
+    var ordem = { peso_altura:0, perimetro:1, bioimpedancia:2, custom:3 };
+    var itensOrdenados = itens.slice().sort(function(a,b){
+      var ma = getMetrica(a.metricaId), mb = getMetrica(b.metricaId);
+      var oa = ma ? (ordem[ma.categoria]===undefined?9:ordem[ma.categoria]) : 9;
+      var ob = mb ? (ordem[mb.categoria]===undefined?9:ordem[mb.categoria]) : 9;
+      if (oa !== ob) return oa - ob;
+      var na = ma ? ma.nome : "", nb = mb ? mb.nome : "";
+      return na < nb ? -1 : (na > nb ? 1 : 0);
+    });
+
+    var logoHtml = prof.logo
+      ? '<img class="recibo-logo" src="'+esc(prof.logo)+'" alt="Logo">'
+      : '<div class="recibo-logo-placeholder">'+iniciais(prof.nome||"PT")+'</div>';
+
+    var itensHtml = itensOrdenados.length
+      ? itensOrdenados.map(function(it){
+          var m = getMetrica(it.metricaId);
+          return '<div class="recibo-item"><span class="recibo-item-dia">'+(m?esc(m.nome):"?")+'</span><span>'+fmtNumPt(it.valor)+' '+(m?esc(m.unidade):it.unidade)+'</span></div>';
+        }).join("")
+      : '<div class="recibo-item"><span class="recibo-item-dia">Nenhuma medida lançada.</span></div>';
+
+    var html = '<div class="recibo-doc">';
+    html += '<div class="recibo-brandbar"><div class="recibo-wordmark">LT<span class="accent">360</span></div>'+
+      '<div class="recibo-status-pill info">'+ICONS.chart+'Avaliação física</div></div>';
+    html += '<div class="recibo-tagline">Gestão para Personal Trainers</div>';
+    html += '<div class="recibo-titulo">Relatório de avaliação física</div>';
+    html += '<div class="recibo-top-grid">';
+    html += '<div class="recibo-prof-row">'+logoHtml+
+      '<div class="recibo-prof-info"><div class="recibo-prof-label">Personal Trainer</div>'+
+      '<div class="recibo-prof-nome">'+esc(prof.nome||"Personal Trainer")+'</div>'+
+      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+esc(prof.telefone)) : "", prof.pix ? ("Pix: "+esc(prof.pix)) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
+    html += '<div class="recibo-info-grid">'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+esc(aluno?aluno.nome:"—")+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.calendar+'</span><div><span class="recibo-info-label">Data da avaliação</span><span class="recibo-info-valor">'+rotuloDataAvaliacao(av)+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Contexto</span><span class="recibo-info-valor">'+(av.aulaId?"Lançada durante uma aula":"Lançada fora de aula")+'</span></div></div>'+
+      '</div>';
+    html += '</div>';
+    html += '<div class="recibo-itens-titulo">Medidas registradas</div>';
+    html += '<div class="recibo-itens-lista'+(itensOrdenados.length>=6 ? ' cols-2' : '')+'">'+itensHtml+'</div>';
+    if (av.observacoes){
+      html += '<div class="recibo-itens-titulo" style="margin-top:16px;">Observações</div>';
+      html += '<div class="recibo-item"><span class="recibo-item-dia">'+esc(av.observacoes)+'</span></div>';
+    }
+    html += '<div class="recibo-footer">Relatório emitido em '+fmtDataBR(fmtData(hoje))+' pelo LT360.</div>';
+    html += '</div>';
+
+    document.getElementById("relatorio-avaliacao-conteudo").innerHTML = html;
+    abrirModal("modal-relatorio-avaliacao");
+  };
+
+  window.baixarRelatorioAvaliacaoPDF = function(){
+    var original = document.querySelector("#relatorio-avaliacao-conteudo .recibo-doc");
+    if (!original || typeof html2pdf === "undefined"){
+      mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
+      return;
+    }
+    var av = getAvaliacao(relatorioAvaliacaoAtualId);
+    var aluno = av ? getAluno(av.alunoId) : null;
+    var nomeArquivo = "avaliacao-"+(aluno ? aluno.nome.replace(/\s+/g,"-").toLowerCase() : "aluno")+(av ? ("-"+av.data) : "")+".pdf";
+
+    // Mesmo mecanismo do recibo: largura fixa, altura calculada a partir do
+    // canvas renderizado (sem página A4 fixa, sem sobra em branco), gerado
+    // num clone fora da tela para não alterar o modal em exibição.
+    var PDF_WIDTH_PX = 640;
+    var MARGIN_MM = 10;
+    var SCALE = 2;
+    var PX_TO_MM = 25.4 / 96;
+
+    var clone = original.cloneNode(true);
+    clone.classList.add("recibo-pdf-mode");
+    var wrap = document.createElement("div");
+    wrap.style.position = "fixed";
+    wrap.style.left = "-10000px";
+    wrap.style.top = "0";
+    wrap.style.width = PDF_WIDTH_PX + "px";
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+
+    function limpar(){ if (wrap.parentNode) document.body.removeChild(wrap); }
+
+    var worker = html2pdf().set({
+      filename: nomeArquivo,
+      margin: MARGIN_MM,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: SCALE, backgroundColor: "#f4f4f6", windowWidth: PDF_WIDTH_PX },
+      jsPDF: { unit: "mm", format: [PDF_WIDTH_PX * PX_TO_MM + MARGIN_MM * 2, 1000], orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all"] }
+    }).from(clone);
+
+    worker.toCanvas().then(function(){
+      var canvas = worker.prop.canvas;
+      var widthPx = canvas.width / SCALE;
+      var heightPx = (canvas.height / SCALE) + 2;
+      var pageWidthMM = widthPx * PX_TO_MM + MARGIN_MM * 2;
+      var pageHeightMM = heightPx * PX_TO_MM + MARGIN_MM * 2;
+      worker.prop.pageSize = null;
+      return worker.set({
+        jsPDF: { unit: "mm", format: [pageWidthMM, pageHeightMM], orientation: pageWidthMM >= pageHeightMM ? "landscape" : "portrait" }
+      }).toPdf();
+    }).then(function(){
+      return worker.save();
+    }).then(limpar).catch(function(){
+      limpar();
+      mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
+    });
+  };
+
   window.setAlunoAvalMetrica = function(alunoId, id){ alunoAvalMetricaSel = id; abrirDetalheAluno(alunoId); };
   window.toggleAlunoAvalExpandida = function(alunoId, id, estavaAberta){ alunoAvalExpandidas[id] = !estavaAberta; abrirDetalheAluno(alunoId); };
 
@@ -2510,6 +2628,7 @@ import './styles.css';
 
   window.salvarMetricaCustom = async function(ev){
     ev.preventDefault();
+    var categoria = document.getElementById("f-metrica-categoria").value;
     var nome = document.getElementById("f-metrica-nome").value.trim();
     var unidade = document.getElementById("f-metrica-unidade").value.trim();
     var min = document.getElementById("f-metrica-min").value;
@@ -2523,13 +2642,18 @@ import './styles.css';
     try {
       var r = await sb.from("metricas_catalogo").insert({
         professor_id: usuarioId, metrica_codigo: codigo, nome_exibicao: nome,
-        categoria: "custom", unidade_padrao: unidade,
+        categoria: categoria, unidade_padrao: unidade,
         valor_min: min === "" ? null : Number(min), valor_max: max === "" ? null : Number(max)
       }).select("*").single();
       if (r.error) throw r.error;
-      state.metricasCatalogo.push(rowToMetrica(r.data));
+      var novaMetrica = rowToMetrica(r.data);
+      state.metricasCatalogo.push(novaMetrica);
       fecharModal("modal-metrica-nova");
-      adicionarLinhaMetricaExtra(null, r.data.id);
+      // Perímetro entra no grupo fixo (igual às demais); as outras categorias
+      // (bioimpedância/personalizada) entram como linha extra — sem reconstruir
+      // os grupos fixos, para não perder valores que o professor já tenha digitado.
+      if (categoria === "perimetro") adicionarCampoFixo(novaMetrica);
+      else adicionarLinhaMetricaExtra(null, r.data.id);
       mostrarToast("Métrica \""+nome+"\" criada.");
     } catch(err){
       console.error(err);
@@ -2576,6 +2700,18 @@ import './styles.css';
       });
       el.innerHTML = html;
     });
+  }
+  // Acrescenta um campo ao grupo fixo (peso_altura/perimetro) sem reconstruir
+  // o grupo inteiro — usado ao criar uma métrica de perímetro nova no meio do
+  // preenchimento da avaliação, para não perder valores já digitados.
+  function adicionarCampoFixo(m){
+    var el = document.getElementById("aval-grupo-" + m.categoria);
+    if (!el) return;
+    var div = document.createElement("div");
+    div.className = "field";
+    div.innerHTML = '<label>'+esc(m.nome)+' ('+esc(m.unidade)+')</label>' +
+      '<input type="number" step="any" class="aval-fixo-input" data-metrica-id="'+m.id+'" data-unidade="'+esc(m.unidade)+'" value="">';
+    el.appendChild(div);
   }
 
   window.abrirModalAvaliacao = function(alunoId, avaliacaoId){

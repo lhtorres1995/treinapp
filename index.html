@@ -751,11 +751,18 @@
     <div class="modal-head">
       <div>
         <div class="modal-title">Nova métrica personalizada</div>
-        <div class="modal-subtitle">Ex.: um índice específico da sua balança de bioimpedância.</div>
+        <div class="modal-subtitle">Ex.: um perímetro específico ou um índice da sua balança de bioimpedância.</div>
       </div>
       <button type="button" class="modal-close" onclick="fecharModal('modal-metrica-nova')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <form id="form-metrica-nova" onsubmit="salvarMetricaCustom(event)">
+      <div class="field">
+        <label for="f-metrica-categoria">Tipo de métrica</label>
+        <select id="f-metrica-categoria">
+          <option value="perimetro">Perímetro (ex.: pescoço, antebraço)</option>
+          <option value="custom">Outra (bioimpedância, índice personalizado etc.)</option>
+        </select>
+      </div>
       <div class="field">
         <label for="f-metrica-nome">Nome da métrica</label>
         <input id="f-metrica-nome" required placeholder="Ex.: Massa muscular">
@@ -859,6 +866,18 @@
       <button class="btn" onclick="fecharModal('modal-recibo')">Fechar</button>
       <button class="btn" id="btn-recibo-pdf" onclick="baixarReciboPDF()">Baixar PDF</button>
       <button class="btn primary" onclick="enviarReciboWhats()">Enviar WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RELATÓRIO DE AVALIAÇÃO FÍSICA -->
+<div class="modal-overlay center" id="modal-relatorio-avaliacao">
+  <div class="modal-document">
+    <button type="button" class="modal-close modal-document-close" onclick="fecharModal('modal-relatorio-avaliacao')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <div id="relatorio-avaliacao-conteudo"></div>
+    <div class="action-row">
+      <button class="btn" onclick="fecharModal('modal-relatorio-avaliacao')">Fechar</button>
+      <button class="btn primary" id="btn-relatorio-avaliacao-pdf" onclick="baixarRelatorioAvaliacaoPDF()">Baixar PDF</button>
     </div>
   </div>
 </div>
