@@ -2514,10 +2514,12 @@ import './styles.css';
     html += '<div class="recibo-tagline">Gestão para Personal Trainers</div>';
     html += '<div class="recibo-titulo">Relatório de avaliação física</div>';
     html += '<div class="recibo-top-grid">';
+    // Sem Pix aqui (diferente do recibo de cobrança): este documento não é
+    // financeiro, não faz sentido mostrar dado de pagamento.
     html += '<div class="recibo-prof-row">'+logoHtml+
       '<div class="recibo-prof-info"><div class="recibo-prof-label">Personal Trainer</div>'+
       '<div class="recibo-prof-nome">'+esc(prof.nome||"Personal Trainer")+'</div>'+
-      '<div class="recibo-prof-meta">'+[prof.telefone ? ("Tel: "+esc(prof.telefone)) : "", prof.pix ? ("Pix: "+esc(prof.pix)) : ""].filter(Boolean).join(" · ")+'</div></div></div>';
+      '<div class="recibo-prof-meta">'+(prof.telefone ? ("Tel: "+esc(prof.telefone)) : "")+'</div></div></div>';
     html += '<div class="recibo-info-grid">'+
       '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+esc(aluno?aluno.nome:"—")+'</span></div></div>'+
       '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.calendar+'</span><div><span class="recibo-info-label">Data da avaliação</span><span class="recibo-info-valor">'+rotuloDataAvaliacao(av)+'</span></div></div>'+
