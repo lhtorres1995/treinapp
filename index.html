@@ -686,6 +686,103 @@
   </div>
 </div>
 
+<!-- MODAL AVALIAÇÃO FÍSICA -->
+<div class="modal-overlay" id="modal-avaliacao">
+  <div class="modal-sheet lg">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-avaliacao-titulo">Nova avaliação física</div>
+        <div class="modal-subtitle" id="modal-avaliacao-subtitulo">Registre peso, perímetros e outras métricas do aluno.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharModal('modal-avaliacao')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <form id="form-avaliacao" onsubmit="salvarAvaliacao(event)">
+      <div class="modal-section">
+        <div class="modal-section-title">Quando</div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-aval-data">Data da avaliação</label>
+            <input id="f-aval-data" type="date" required>
+          </div>
+          <div class="field">
+            <label for="f-aval-aula">Aula vinculada (opcional)</label>
+            <select id="f-aval-aula">
+              <option value="">Nenhuma — avaliação fora de aula</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Peso e altura</div>
+        <div class="field-row cols-3" id="aval-grupo-peso_altura"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Perímetros (cm)</div>
+        <div class="field-row cols-3" id="aval-grupo-perimetro"></div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Bioimpedância e métricas personalizadas</div>
+        <div id="aval-itens-extra"></div>
+        <div class="action-row">
+          <button type="button" class="btn sm ghost" onclick="adicionarLinhaMetricaExtra()">+ Adicionar métrica</button>
+          <button type="button" class="btn sm ghost" onclick="criarMetricaInline()">+ Nova métrica personalizada</button>
+        </div>
+        <div class="hint">Escolha uma métrica já existente ou crie uma nova (ex.: indicadores da sua balança de bioimpedância). O nome e a unidade de uma métrica, depois de criada, não podem ser alterados — se errar, crie outra.</div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Observações</div>
+        <div class="field">
+          <textarea id="f-aval-observacoes" rows="3" placeholder="Observações sobre esta avaliação (opcional)"></textarea>
+        </div>
+      </div>
+      <div class="action-row">
+        <button type="button" class="btn block" onclick="fecharModal('modal-avaliacao')">Cancelar</button>
+        <button type="submit" class="btn primary block" id="modal-avaliacao-submit">Salvar avaliação</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL NOVA MÉTRICA PERSONALIZADA -->
+<div class="modal-overlay center" id="modal-metrica-nova">
+  <div class="modal-dialog">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">Nova métrica personalizada</div>
+        <div class="modal-subtitle">Ex.: um índice específico da sua balança de bioimpedância.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="fecharModal('modal-metrica-nova')" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    </div>
+    <form id="form-metrica-nova" onsubmit="salvarMetricaCustom(event)">
+      <div class="field">
+        <label for="f-metrica-nome">Nome da métrica</label>
+        <input id="f-metrica-nome" required placeholder="Ex.: Massa muscular">
+      </div>
+      <div class="field-row cols-3">
+        <div class="field">
+          <label for="f-metrica-unidade">Unidade</label>
+          <input id="f-metrica-unidade" required placeholder="Ex.: kg, %, kcal">
+        </div>
+        <div class="field">
+          <label for="f-metrica-min">Mínimo plausível (opcional)</label>
+          <input id="f-metrica-min" type="number" step="0.01">
+        </div>
+        <div class="field">
+          <label for="f-metrica-max">Máximo plausível (opcional)</label>
+          <input id="f-metrica-max" type="number" step="0.01">
+        </div>
+      </div>
+      <div class="hint">Essas faixas plausíveis ajudam a evitar erro de digitação — não precisa ser exato.</div>
+      <div class="action-row">
+        <button type="button" class="btn block" onclick="fecharModal('modal-metrica-nova')">Cancelar</button>
+        <button type="submit" class="btn primary block">Criar métrica</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- MODAL AULA -->
 <div class="modal-overlay center aula-modal" id="modal-aula">
   <div class="modal-dialog aula-modal-dialog">
