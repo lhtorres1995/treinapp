@@ -28,8 +28,18 @@ import './styles.css';
     chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M12 19V5M20 19v-7"/><path d="M4 19h16"/></svg>',
     layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
     grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>',
-    pesoM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14.5" r="6.5"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/></svg>',
-    alturaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg>',
+    // Pacote de ícones oficial (LT360_Icones_Avaliacao_Fisica) — SVGs originais,
+    // reutilizados como vieram (currentColor, stroke-width 1.8).
+    pesoM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7a4 4 0 0 1 8 0"/><path d="M6 7h12l3 13H3L6 7Z"/><path d="m12 10 2 3-2 2"/></svg>',
+    alturaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v18M4 6l3-3 3 3M4 18l3 3 3-3"/><path d="M13 4h7M13 9h4M13 14h7M13 19h4"/></svg>',
+    bracoM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2-1 3-4 5-5l2-2 2 2 2-4c.6-1.4 2.7-1.2 3 .3l-1 6c-.6 3-3.5 5-7 5H5Z"/><path d="M9 13c1 1 2 2 4 2"/></svg>',
+    coxaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h9l1 6-3 5-2 7h-5l1-9-2-5Z"/><path d="M8 9h9"/></svg>',
+    panturrilhaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3c-1 4-2 6-1 9l2 3-1 6h5l1-6 2-4-1-8"/><path d="M8 12c3 2 5 2 8-1"/></svg>',
+    cinturaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3c1 4 2 5 2 9s-1 5-2 9M18 3c-1 4-2 5-2 9s1 5 2 9"/><path d="M8 9c2 1 6 1 8 0M8 15c2-1 6-1 8 0"/></svg>',
+    peitoralM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4 3 10l4 11h10l4-11-2-6-5 3-2 4-2-4Z"/><path d="M12 11v10"/></svg>',
+    abdomenM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3 5 9l2 12h10l2-12-2-6"/><path d="M9 8h6M9 12h6M9 16h6M12 8v12"/></svg>',
+    gorduraM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-3 5-7 8-7 12a7 7 0 0 0 14 0c0-4-4-7-7-12Z"/><path d="M9 16l6-6"/><circle cx="9" cy="11" r=".8"/><circle cx="15" cy="16" r=".8"/></svg>',
+    // Genéricos: usados só quando não há ícone específico no pacote (ex.: quadril, métricas custom).
     percentM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7.5" r="2.3"/><circle cx="17" cy="16.5" r="2.3"/><path d="M18 6 6 18"/></svg>',
     perimetroM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 3.3V6M12 18v2.7M3.3 12H6M18 12h2.7"/></svg>'
   };
@@ -2245,12 +2255,22 @@ import './styles.css';
     var n = Math.round(Number(v)*100)/100;
     return n.toString().replace(".", ",");
   }
+  // Ícone específico por código quando o pacote oferece um; cai para o
+  // genérico de perímetro (quadril, custom) ou de bioimpedância (custom).
+  var ICONE_POR_CODIGO = {
+    peso: "pesoM", altura: "alturaM",
+    braco_direito: "bracoM", braco_esquerdo: "bracoM",
+    coxa_direita: "coxaM", coxa_esquerda: "coxaM",
+    panturrilha_direita: "panturrilhaM", panturrilha_esquerda: "panturrilhaM",
+    cintura_escapular: "cinturaM", peitoral: "peitoralM", abdomen: "abdomenM",
+    percentual_gordura_corporal: "gorduraM"
+  };
   function iconMetrica(m){
     if (!m) return ICONS.percentM;
-    if (m.codigo === "peso") return ICONS.pesoM;
-    if (m.codigo === "altura") return ICONS.alturaM;
+    var chave = ICONE_POR_CODIGO[m.codigo];
+    if (chave) return ICONS[chave];
     if (m.categoria === "perimetro") return ICONS.perimetroM;
-    return ICONS.percentM; // bioimpedância / custom
+    return ICONS.percentM; // bioimpedância / custom sem ícone específico
   }
   // "Principais medidas": peso e altura sempre aparecem (com placeholder se
   // não lançados nesta avaliação) + até 2 outras métricas realmente medidas,
@@ -2280,8 +2300,22 @@ import './styles.css';
   // Gráfico de evolução: área + linha + grid + rótulo de valor em cada ponto.
   // Cor única e neutra (var(--accent)) — nunca verde/vermelho: uma métrica
   // subir ou cair não é por si só "bom" ou "ruim" (depende do objetivo do aluno).
+  // Rótulo com "chip" de fundo (evita colidir visualmente com grade/linha/eixo
+  // atrás dele — o rect é opaco e desenhado por cima de tudo, então sempre
+  // cobre o que estiver embaixo do texto).
+  function svgChip(px, py, texto, anchor, opts){
+    opts = opts || {};
+    var fontSize = opts.fontSize || 11;
+    var peso = opts.bold ? 700 : 600;
+    var w = Math.max(fontSize*1.6, texto.length*fontSize*0.62 + 10);
+    var h = fontSize + 7;
+    var rectX = anchor==="start" ? px-4 : (anchor==="end" ? px-w+4 : px-w/2);
+    var rectY = py - fontSize - 1;
+    return '<rect x="'+rectX+'" y="'+rectY+'" width="'+w+'" height="'+h+'" rx="4" fill="'+(opts.fill||"var(--surface)")+'"></rect>'+
+      '<text x="'+px+'" y="'+py+'" font-size="'+fontSize+'" font-weight="'+peso+'" fill="'+(opts.color||"var(--fg)")+'" text-anchor="'+anchor+'">'+esc(texto)+'</text>';
+  }
   function svgEvolucao(pontos, unidade, gradId){
-    var w=640, h=220, padL=42, padR=18, padT=26, padB=40;
+    var w=640, h=230, padL=44, padR=20, padT=30, padB=44;
     var areaW = w-padL-padR, areaH = h-padT-padB;
     var valores = pontos.map(function(p){ return p.valor; });
     var min = Math.min.apply(null, valores), max = Math.max.apply(null, valores);
@@ -2302,17 +2336,28 @@ import './styles.css';
     var linePts = pontos.map(function(p,i){ return x(i)+","+y(p.valor); }).join(" ");
     var areaPts = linePts+" "+x(n-1)+","+(h-padB)+" "+x(0)+","+(h-padB);
 
+    // Rótulos do eixo X: se os pontos estiverem muito próximos, mostra só
+    // alguns (sempre o primeiro e o último) para não empilhar texto.
+    var minSpacing = 58;
+    var step = n>1 ? Math.max(1, Math.ceil(minSpacing / (areaW/(n-1)))) : 1;
+
     var dots="", valueLabels="", xLabels="";
     pontos.forEach(function(p,i){
       var px=x(i), py=y(p.valor);
-      dots += '<circle cx="'+px+'" cy="'+py+'" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"></circle>';
-      valueLabels += '<text x="'+px+'" y="'+(py-12)+'" font-size="11" font-weight="700" fill="var(--fg)" text-anchor="middle">'+fmtNumPt(p.valor)+' '+esc(unidade)+'</text>';
-      var partes = rotuloDataAvaliacao(p.av).split(" às ");
-      xLabels += '<text x="'+px+'" y="'+(h-padB+16)+'" font-size="10" fill="var(--fg-muted)" text-anchor="middle">'+esc(partes[0])+'</text>';
-      if (partes[1]) xLabels += '<text x="'+px+'" y="'+(h-padB+29)+'" font-size="10" fill="var(--fg-muted)" text-anchor="middle">'+esc(partes[1])+'</text>';
+      var rotulo = rotuloDataAvaliacao(p.av);
+      var tituloAcessivel = rotulo+": "+fmtNumPt(p.valor)+" "+unidade;
+      dots += '<circle cx="'+px+'" cy="'+py+'" r="5" tabindex="0" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"><title>'+esc(tituloAcessivel)+'</title></circle>';
+      var anchorV = i===0 ? "start" : (i===n-1 ? "end" : "middle");
+      valueLabels += svgChip(px, py-14, fmtNumPt(p.valor)+" "+unidade, anchorV, { bold:true });
+      if (i===0 || i===n-1 || i%step===0){
+        var partes = rotulo.split(" às ");
+        var anchorX = i===0 ? "start" : (i===n-1 ? "end" : "middle");
+        xLabels += '<text x="'+px+'" y="'+(h-padB+17)+'" font-size="10" fill="var(--fg-muted)" text-anchor="'+anchorX+'">'+esc(partes[0])+'</text>';
+        if (partes[1]) xLabels += '<text x="'+px+'" y="'+(h-padB+30)+'" font-size="10" fill="var(--fg-muted)" text-anchor="'+anchorX+'">'+esc(partes[1])+'</text>';
+      }
     });
 
-    return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:220px;display:block;">'+
+    return '<svg class="aval-chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:230px;display:block;" role="group" aria-label="Gráfico de evolução de '+esc(unidade)+'">'+
       '<defs><linearGradient id="'+gradId+'" x1="0" y1="0" x2="0" y2="1">'+
       '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"></stop>'+
       '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0"></stop></linearGradient></defs>'+
@@ -2335,7 +2380,7 @@ import './styles.css';
 
     var ultima = ativas[0] || lista[0];
     var primeira = ativas[ativas.length-1] || lista[lista.length-1];
-    html += '<div class="stat-row">';
+    html += '<div class="stat-row aval-indicadores">';
     html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.calendar+'</span><div><div class="stat-value sm">'+rotuloDataAvaliacao(ultima)+'</div><div class="stat-label">Última avaliação</div></div></div>';
     html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.layers+'</span><div><div class="stat-value sm">'+ativas.length+'</div><div class="stat-label">Total de avaliações</div></div></div>';
     html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.calendar+'</span><div><div class="stat-value sm">'+fmtDataBR(primeira.data)+' – '+fmtDataBR(ultima.data)+'</div><div class="stat-label">Período</div></div></div>';
@@ -2402,8 +2447,9 @@ import './styles.css';
         html += '<div class="aval-exp-cols">';
         html += '<div><div class="aval-exp-col-title">Principais medidas</div>';
         principais.forEach(function(d){
+          var nomeHtml = '<span class="aval-row-label"><span class="aval-row-ic">'+iconMetrica(d.metrica)+'</span><span class="nome">'+esc(d.metrica.nome)+'</span></span>';
           if (!d.item){
-            html += '<div class="aval-exp-row"><span class="nome">'+esc(d.metrica.nome)+'</span><span class="valor" style="color:var(--fg-muted);font-weight:600;">Não informado</span></div>';
+            html += '<div class="aval-exp-row">'+nomeHtml+'<span class="valor" style="color:var(--fg-muted);font-weight:600;">Não informado</span></div>';
             return;
           }
           var ant = itensAnterior.filter(function(x){ return x.metricaId===d.item.metricaId; })[0];
@@ -2414,7 +2460,7 @@ import './styles.css';
               ? '<span class="delta neutro">(—)</span>'
               : '<span class="delta">('+(delta>0?"+":"")+fmtNumPt(delta)+' '+esc(d.item.unidade)+')</span>';
           }
-          html += '<div class="aval-exp-row"><span class="nome">'+esc(d.metrica.nome)+'</span><span><span class="valor">'+fmtNumPt(d.item.valor)+' '+esc(d.item.unidade)+'</span>'+deltaHtml+'</span></div>';
+          html += '<div class="aval-exp-row">'+nomeHtml+'<span><span class="valor">'+fmtNumPt(d.item.valor)+' '+esc(d.item.unidade)+'</span>'+deltaHtml+'</span></div>';
         });
         html += '</div>';
         html += '<div><div class="aval-exp-col-title">Todas as medidas</div><div class="aval-exp-col-todas">';
@@ -2755,18 +2801,15 @@ import './styles.css';
     html += '<button class="back-btn" onclick="voltarListaAlunos()">'+ICONS.chevL+' Alunos</button>';
     html += '<div class="student-detail-header">';
     html += '<div class="student-detail-id">';
-    html += avatarAluno(aluno);
+    html += avatarAluno(aluno, "width:34px;height:34px;font-size:13px;border-radius:10px;");
     html += '<div><div class="card-title" style="font-size:16px;">'+esc(aluno.nome)+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
     html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
     html += '<button class="btn sm" onclick="abrirModalAluno(\''+aluno.id+'\')">'+ICONS.edit+' Editar</button>';
     html += '</div>';
-    html += '<div class="action-row" style="margin-top:6px;">';
+    html += '<div class="action-row aluno-header-acoes">';
     html += '<button class="btn sm ghost" onclick="confirmarAlternarAtivoAluno(\''+aluno.id+'\')">'+(aluno.ativo ? 'Inativar aluno' : 'Reativar aluno')+'</button>';
     html += '<button class="btn sm ghost" onclick="confirmarExcluirAluno(\''+aluno.id+'\')">Excluir aluno</button>';
-    html += '</div>';
-
-    html += '<div class="action-row" style="margin-top:6px;">';
     if (aluno.authUserId){
       html += '<span class="badge ok">'+ICONS.check+' Convidado para o portal</span>';
       html += '<button class="btn sm ghost" onclick="convidarAluno(\''+aluno.id+'\')" id="btn-convidar-'+aluno.id+'">Reenviar convite</button>';

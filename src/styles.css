@@ -157,7 +157,7 @@
   .aval-extra-linha { align-items: center; }
 
   /* ---- Abas do detalhe do aluno (Visão geral / Avaliações físicas / Aulas / Financeiro) ---- */
-  .aluno-abas { display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin:14px 0 16px; }
+  .aluno-abas { display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin:10px 0 14px; }
   .aluno-aba {
     display:flex; align-items:center; gap:7px; background:none; border:1px solid transparent;
     border-radius:999px; padding:9px 15px; margin-bottom:8px; font-size:13px; font-weight:700;
@@ -192,11 +192,26 @@
   .aval-exp-col-todas { max-height:220px; overflow-y:auto; }
   .aval-exp-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .aval-exp-row:last-child { border-bottom:none; }
+  .aval-row-label { display:flex; align-items:center; gap:7px; min-width:0; }
+  .aval-row-ic { width:16px; height:16px; flex:none; color: var(--accent); }
+  .aval-row-ic svg { width:100%; height:100%; display:block; }
+  .aval-chart circle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .aval-exp-row .nome { color: var(--fg-muted); }
   .aval-exp-row .valor { font-weight:700; white-space:nowrap; }
   .aval-exp-row .delta { font-size:11px; color: var(--accent); font-weight:600; margin-left:4px; white-space:nowrap; }
   .aval-exp-row .delta.neutro { color: var(--fg-muted); font-weight:500; }
   .aval-exp-obs { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+
+  /* indicadores da aba Avaliações físicas: grid própria (não mexe no
+     .stat-row usado em outras telas do app) — 3 colunas só cabem bem a
+     partir de ~760px; abaixo disso os textos (datas, "Última avaliação")
+     ficam espremidos. */
+  @media (max-width: 760px){
+    .aval-indicadores { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px){
+    .aval-indicadores { grid-template-columns: 1fr; }
+  }
 
   @media (max-width: 620px){
     .aluno-abas { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -454,8 +469,9 @@
   }
   .disp-dia-inicio:disabled, .disp-dia-fim:disabled { opacity: .45; }
 
-  .student-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .student-detail-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .student-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+  .student-detail-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .aluno-header-acoes { margin-top: 4px; gap: 5px; }
   .avatar {
     width: 40px; height: 40px; border-radius: 12px;
     background: var(--accent-soft); color: var(--accent);
@@ -463,7 +479,7 @@
     font-family: var(--font-display); font-weight: 800; font-size: 15px;
     flex: none;
   }
-  .back-btn { background: none; border: none; color: var(--fg-muted); padding: 4px 0 10px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .back-btn { background: none; border: none; color: var(--fg-muted); padding: 2px 0 6px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer; }
   .back-btn svg { width: 14px; height: 14px; }
 
   .day-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; position: relative; }
