@@ -1,7 +1,9 @@
 -- ============================================================================
 -- LT360 — Avaliação física (acompanhamento de evolução do aluno)
--- NÃO APLICADA ao banco remoto. Versionada para revisão e aplicação manual,
--- com autorização explícita, pelo usuário.
+-- APLICADA ao banco remoto trainer-flow em 2026-11-01, com autorização
+-- explícita do usuário nesta sessão, via Supabase MCP (apply_migration,
+-- version 20261101175702, name "avaliacoes_fisicas"). Mantida versionada como
+-- fonte e referência de revisão. Não reaplicar.
 -- ============================================================================
 --
 -- O que esta migração cria:
