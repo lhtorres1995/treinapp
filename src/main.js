@@ -2623,8 +2623,9 @@ import './styles.css';
     return msg || "Erro ao salvar avaliação.";
   }
 
-  window.criarMetricaInline = function(){
+  window.criarMetricaInline = function(categoriaPreSelecionada){
     document.getElementById("form-metrica-nova").reset();
+    if (categoriaPreSelecionada) document.getElementById("f-metrica-categoria").value = categoriaPreSelecionada;
     abrirModal("modal-metrica-nova");
   };
 
