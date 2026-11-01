@@ -182,7 +182,7 @@ import './styles.css';
     }
   });
 
-  var state = { alunos: [], aulas: [], pagamentos: [], disponibilidade: [], bloqueios: [], solicitacoes: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
+  var state = { alunos: [], aulas: [], pagamentos: [], disponibilidade: [], bloqueios: [], solicitacoes: [], metricasCatalogo: [], avaliacoesFisicas: [], avaliacoesFisicasItens: [], professor: {nome:"", telefone:"", pix:"", logo:null} };
 
   // ---------- mapeamento front <-> banco ----------
   function alunoToRow(a){
@@ -284,6 +284,33 @@ import './styles.css';
       dataPagamento: r.data_pagamento, aulaIds: r.aula_ids || [],
       pagoInformadoEm: r.pago_informado_em || null
     };
+  }
+
+  // ---------- avaliação física: mapeamento linha <-> objeto local ----------
+  function rowToMetrica(r){
+    return {
+      id: r.id, professorId: r.professor_id, codigo: r.metrica_codigo,
+      nome: r.nome_exibicao, categoria: r.categoria, unidade: r.unidade_padrao,
+      min: (r.valor_min===0 || r.valor_min) ? Number(r.valor_min) : null,
+      max: (r.valor_max===0 || r.valor_max) ? Number(r.valor_max) : null,
+      ativo: r.ativo !== false
+    };
+  }
+  function rowToAvaliacao(r){
+    return {
+      id: r.id, alunoId: r.aluno_id, aulaId: r.aula_id || null,
+      data: r.data_avaliacao, observacoes: r.observacoes || "",
+      excluidaEm: r.excluida_em || null, createdAt: r.created_at
+    };
+  }
+  function avaliacaoToRowInsert(a){
+    return {
+      id: a.id, professor_id: usuarioId, aluno_id: a.alunoId,
+      aula_id: a.aulaId || null, data_avaliacao: a.data, observacoes: a.observacoes || null
+    };
+  }
+  function rowToItemAvaliacao(r){
+    return { id: r.id, avaliacaoId: r.avaliacao_id, metricaId: r.metrica_id, valor: Number(r.valor), unidade: r.unidade };
   }
 
   // ---------- persistência incremental (diff local -> banco) ----------
@@ -495,6 +522,19 @@ import './styles.css';
       var sol = await sb.from("solicitacoes").select("*").eq("professor_id", usuarioId).order("created_at", { ascending: false });
       state.solicitacoes = sol.error ? [] : (sol.data || []).map(rowToSolicitacao);
     } catch(e){ state.solicitacoes = []; }
+
+    // Avaliação física: carga tolerante, fora do Promise.all principal — a
+    // migração 0007 ainda não foi aplicada ao banco remoto, então estas
+    // tabelas podem não existir ainda. Enquanto isso, o app continua
+    // funcionando normalmente e a seção de avaliações aparece vazia.
+    try {
+      var mc = await sb.from("metricas_catalogo").select("*").order("categoria").order("nome_exibicao");
+      state.metricasCatalogo = mc.error ? [] : (mc.data || []).map(rowToMetrica);
+      var af = await sb.from("avaliacoes_fisicas").select("*").eq("professor_id", usuarioId).order("data_avaliacao", { ascending: false });
+      state.avaliacoesFisicas = af.error ? [] : (af.data || []).map(rowToAvaliacao);
+      var afi = await sb.from("avaliacoes_fisicas_itens").select("*");
+      state.avaliacoesFisicasItens = afi.error ? [] : (afi.data || []).map(rowToItemAvaliacao);
+    } catch(e){ state.metricasCatalogo = []; state.avaliacoesFisicas = []; state.avaliacoesFisicasItens = []; }
   }
   function rowToSolicitacao(r){
     return {
@@ -2137,6 +2177,342 @@ import './styles.css';
     mostrarToast("Baixe o PDF e anexe ele na conversa do WhatsApp que acabou de abrir.");
   };
 
+  // ---------- avaliação física ----------
+  var editingAvaliacaoId = null;
+  var editingAvaliacaoAlunoId = null;
+
+  function normalizarCodigoMetrica(nome){
+    return (nome || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+  function metricasAtivas(){ return state.metricasCatalogo.filter(function(m){ return m.ativo; }); }
+  function metricasPorCategoria(cat){ return metricasAtivas().filter(function(m){ return m.categoria === cat; }); }
+  function getMetrica(id){
+    for (var i=0;i<state.metricasCatalogo.length;i++) if (state.metricasCatalogo[i].id===id) return state.metricasCatalogo[i];
+    return null;
+  }
+  function getAvaliacao(id){
+    for (var i=0;i<state.avaliacoesFisicas.length;i++) if (state.avaliacoesFisicas[i].id===id) return state.avaliacoesFisicas[i];
+    return null;
+  }
+  function itensDaAvaliacao(avaliacaoId){
+    return state.avaliacoesFisicasItens.filter(function(it){ return it.avaliacaoId === avaliacaoId; });
+  }
+  function avaliacoesDoAluno(alunoId, incluirExcluidas){
+    return state.avaliacoesFisicas
+      .filter(function(a){ return a.alunoId === alunoId && (incluirExcluidas || !a.excluidaEm); })
+      .sort(function(a,b){ return a.data < b.data ? 1 : -1; });
+  }
+
+  // Mensagens amigáveis para os códigos de erro das triggers de validação
+  // (ver migração 0007_avaliacoes_fisicas.sql).
+  function mensagemErroAvaliacao(err){
+    var msg = (err && err.message) || "";
+    var code = (err && err.code) || "";
+    var map = {
+      LT101: "Métrica não encontrada ou sem permissão.",
+      LT102: "Essa métrica está inativa e não pode ser usada.",
+      LT103: "Avaliação não encontrada ou sem permissão.",
+      LT104: "Essa métrica não pertence a este professor.",
+      LT105: "Unidade incompatível com a métrica escolhida.",
+      LT106: "Valor abaixo do mínimo plausível para essa métrica.",
+      LT107: "Valor acima do máximo plausível para essa métrica.",
+      LT110: "Aula não encontrada ou sem permissão.",
+      LT111: "Essa aula pertence a outro professor.",
+      LT112: "Essa aula não pertence a este aluno.",
+      LT113: "Esse aluno não pertence a este professor.",
+      LT120: "Código, dono e unidade de uma métrica já criada não podem ser alterados."
+    };
+    for (var k in map){ if (msg.indexOf(k) !== -1 || code === k) return map[k]; }
+    if (/duplicate key|unique/i.test(msg)) return "Essa métrica já foi lançada nesta avaliação.";
+    return msg || "Erro ao salvar avaliação.";
+  }
+
+  window.criarMetricaInline = function(){
+    document.getElementById("form-metrica-nova").reset();
+    abrirModal("modal-metrica-nova");
+  };
+
+  window.salvarMetricaCustom = async function(ev){
+    ev.preventDefault();
+    var nome = document.getElementById("f-metrica-nome").value.trim();
+    var unidade = document.getElementById("f-metrica-unidade").value.trim();
+    var min = document.getElementById("f-metrica-min").value;
+    var max = document.getElementById("f-metrica-max").value;
+    var codigo = normalizarCodigoMetrica(nome);
+    if (!codigo){ mostrarToast("Informe um nome válido para a métrica."); return; }
+    var jaExiste = state.metricasCatalogo.some(function(m){
+      return m.codigo === codigo && (m.professorId === usuarioId || m.professorId === null);
+    });
+    if (jaExiste){ mostrarToast("Já existe uma métrica com esse nome. Use a que já existe na lista."); return; }
+    try {
+      var r = await sb.from("metricas_catalogo").insert({
+        professor_id: usuarioId, metrica_codigo: codigo, nome_exibicao: nome,
+        categoria: "custom", unidade_padrao: unidade,
+        valor_min: min === "" ? null : Number(min), valor_max: max === "" ? null : Number(max)
+      }).select("*").single();
+      if (r.error) throw r.error;
+      state.metricasCatalogo.push(rowToMetrica(r.data));
+      fecharModal("modal-metrica-nova");
+      adicionarLinhaMetricaExtra(null, r.data.id);
+      mostrarToast("Métrica \""+nome+"\" criada.");
+    } catch(err){
+      console.error(err);
+      mostrarToast(mensagemErroAvaliacao(err));
+    }
+  };
+
+  window.adicionarLinhaMetricaExtra = function(itemExistente, metricaIdPreSelecionada){
+    var container = document.getElementById("aval-itens-extra");
+    var linhaId = "aval-extra-" + uid();
+    var usadas = {};
+    container.querySelectorAll(".aval-extra-select").forEach(function(sel){ if (sel.value) usadas[sel.value] = true; });
+    var opcoes = metricasAtivas().filter(function(m){ return m.categoria === "bioimpedancia" || m.categoria === "custom"; });
+    var optsHtml = '<option value="">Selecione a métrica...</option>' + opcoes.map(function(m){
+      var disabled = (usadas[m.id] && m.id !== metricaIdPreSelecionada) ? ' disabled' : '';
+      return '<option value="'+m.id+'" data-unidade="'+esc(m.unidade)+'"'+disabled+'>'+esc(m.nome)+' ('+esc(m.unidade)+')</option>';
+    }).join('');
+    var div = document.createElement("div");
+    div.className = "field-row aval-extra-linha";
+    div.id = linhaId;
+    div.innerHTML =
+      '<div class="field"><select class="aval-extra-select">'+optsHtml+'</select></div>' +
+      '<div class="field"><input type="number" step="any" class="aval-extra-valor" placeholder="Valor"></div>' +
+      '<button type="button" class="btn sm ghost" onclick="document.getElementById(\''+linhaId+'\').remove()">Remover</button>';
+    container.appendChild(div);
+    var select = div.querySelector(".aval-extra-select");
+    if (metricaIdPreSelecionada) select.value = metricaIdPreSelecionada;
+    if (itemExistente){
+      select.value = itemExistente.metricaId;
+      div.querySelector(".aval-extra-valor").value = itemExistente.valor;
+    }
+  };
+
+  // Monta os grupos fixos (peso/altura, perímetros) a partir do catálogo —
+  // nada é hardcoded no HTML; se o catálogo mudar, a tela acompanha.
+  function montarGruposFixos(itensExistentes){
+    ["peso_altura", "perimetro"].forEach(function(cat){
+      var el = document.getElementById("aval-grupo-" + cat);
+      var html = "";
+      metricasPorCategoria(cat).forEach(function(m){
+        var existente = (itensExistentes || []).filter(function(it){ return it.metricaId === m.id; })[0];
+        html += '<div class="field"><label>'+esc(m.nome)+' ('+esc(m.unidade)+')</label>' +
+          '<input type="number" step="any" class="aval-fixo-input" data-metrica-id="'+m.id+'" data-unidade="'+esc(m.unidade)+'" value="'+(existente ? existente.valor : '')+'"></div>';
+      });
+      el.innerHTML = html;
+    });
+  }
+
+  window.abrirModalAvaliacao = function(alunoId, avaliacaoId){
+    editingAvaliacaoAlunoId = alunoId;
+    editingAvaliacaoId = avaliacaoId || null;
+    var form = document.getElementById("form-avaliacao");
+    form.reset();
+    document.getElementById("aval-itens-extra").innerHTML = "";
+
+    var aulasDoAluno = state.aulas.filter(function(c){ return c.alunoId === alunoId; })
+      .sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? 1 : -1; });
+    var selAula = document.getElementById("f-aval-aula");
+    selAula.innerHTML = '<option value="">Nenhuma — avaliação fora de aula</option>' + aulasDoAluno.map(function(c){
+      return '<option value="'+c.id+'">'+fmtDataBR(c.data)+' · '+c.hora+'</option>';
+    }).join('');
+
+    var avaliacao = avaliacaoId ? getAvaliacao(avaliacaoId) : null;
+    var itensExistentes = avaliacao ? itensDaAvaliacao(avaliacaoId) : [];
+
+    document.getElementById("modal-avaliacao-titulo").textContent = avaliacaoId ? "Editar avaliação física" : "Nova avaliação física";
+    document.getElementById("modal-avaliacao-submit").textContent = avaliacaoId ? "Salvar alterações" : "Salvar avaliação";
+
+    montarGruposFixos(itensExistentes);
+
+    if (avaliacao){
+      document.getElementById("f-aval-data").value = avaliacao.data;
+      selAula.value = avaliacao.aulaId || "";
+      document.getElementById("f-aval-observacoes").value = avaliacao.observacoes || "";
+      itensExistentes.forEach(function(it){
+        var metrica = getMetrica(it.metricaId);
+        if (metrica && (metrica.categoria === "bioimpedancia" || metrica.categoria === "custom")){
+          adicionarLinhaMetricaExtra(it);
+        }
+      });
+    } else {
+      document.getElementById("f-aval-data").value = fmtData(hoje);
+    }
+    if (metricasAtivas().length === 0){
+      mostrarToast("O catálogo de métricas ainda não está disponível neste servidor (migração de avaliação física pendente de aplicação).");
+    }
+    abrirModal("modal-avaliacao");
+  };
+
+  window.salvarAvaliacao = async function(ev){
+    ev.preventDefault();
+    var alunoId = editingAvaliacaoAlunoId;
+    var data = document.getElementById("f-aval-data").value;
+    var aulaId = document.getElementById("f-aval-aula").value || null;
+    var observacoes = document.getElementById("f-aval-observacoes").value.trim();
+
+    var itens = [];
+    document.querySelectorAll(".aval-fixo-input").forEach(function(inp){
+      if (inp.value === "") return;
+      itens.push({ metricaId: inp.dataset.metricaId, valor: Number(inp.value), unidade: inp.dataset.unidade });
+    });
+    var extraValido = true;
+    document.querySelectorAll(".aval-extra-linha").forEach(function(linha){
+      var sel = linha.querySelector(".aval-extra-select");
+      var val = linha.querySelector(".aval-extra-valor");
+      if (!sel.value && !val.value) return; // linha vazia, ignora
+      if (!sel.value || val.value === ""){ extraValido = false; return; }
+      var metrica = getMetrica(sel.value);
+      itens.push({ metricaId: sel.value, valor: Number(val.value), unidade: metrica ? metrica.unidade : "" });
+    });
+    if (!extraValido){ mostrarToast("Preencha métrica e valor em todas as linhas adicionadas (ou remova a linha em branco)."); return; }
+    var codigos = {};
+    for (var i=0;i<itens.length;i++){
+      if (codigos[itens[i].metricaId]){ mostrarToast("Há uma métrica duplicada nesta avaliação."); return; }
+      codigos[itens[i].metricaId] = true;
+    }
+    if (itens.length === 0){ mostrarToast("Lance ao menos uma medida para salvar a avaliação."); return; }
+
+    var btn = document.getElementById("modal-avaliacao-submit");
+    btn.disabled = true;
+    try {
+      var avaliacaoId = editingAvaliacaoId;
+      if (avaliacaoId){
+        var ru = await sb.from("avaliacoes_fisicas").update({
+          aula_id: aulaId, data_avaliacao: data, observacoes: observacoes || null
+        }).eq("id", avaliacaoId).select("*").single();
+        if (ru.error) throw ru.error;
+      } else {
+        avaliacaoId = uid();
+        var ri = await sb.from("avaliacoes_fisicas").insert(avaliacaoToRowInsert({
+          id: avaliacaoId, alunoId: alunoId, aulaId: aulaId, data: data, observacoes: observacoes
+        })).select("*").single();
+        if (ri.error) throw ri.error;
+      }
+
+      // Reconcilia itens: insere/atualiza os informados, remove os que
+      // existiam antes e não estão mais no formulário. Cada operação roda
+      // isolada (não em lote) porque a trigger de validação pode rejeitar
+      // uma linha específica (unidade/faixa incompatível) sem que isso deva
+      // abortar as demais.
+      var existentesAntes = itensDaAvaliacao(avaliacaoId);
+      var existentesPorMetrica = {};
+      existentesAntes.forEach(function(it){ existentesPorMetrica[it.metricaId] = it; });
+      var informadosPorMetrica = {};
+      itens.forEach(function(it){ informadosPorMetrica[it.metricaId] = it; });
+
+      var erros = [];
+      for (var mId in informadosPorMetrica){
+        var novo = informadosPorMetrica[mId];
+        var antigo = existentesPorMetrica[mId];
+        try {
+          if (antigo){
+            if (antigo.valor !== novo.valor || antigo.unidade !== novo.unidade){
+              var r1 = await sb.from("avaliacoes_fisicas_itens").update({ valor: novo.valor, unidade: novo.unidade }).eq("id", antigo.id);
+              if (r1.error) throw r1.error;
+            }
+          } else {
+            var r2 = await sb.from("avaliacoes_fisicas_itens").insert({ avaliacao_id: avaliacaoId, metrica_id: novo.metricaId, valor: novo.valor, unidade: novo.unidade });
+            if (r2.error) throw r2.error;
+          }
+        } catch(e){ erros.push({ metricaId: mId, err: e }); }
+      }
+      for (var mId2 in existentesPorMetrica){
+        if (!informadosPorMetrica[mId2]){
+          var r3 = await sb.from("avaliacoes_fisicas_itens").delete().eq("id", existentesPorMetrica[mId2].id);
+          if (r3.error) erros.push({ metricaId: mId2, err: r3.error });
+        }
+      }
+
+      await recarregarAvaliacoesFisicas();
+      fecharModal("modal-avaliacao");
+      renderAll();
+      if (document.getElementById("alunos-detalhe-view") && !document.getElementById("alunos-detalhe-view").hidden) abrirDetalheAluno(alunoId);
+
+      if (erros.length){
+        var nomes = erros.map(function(e){ var m = getMetrica(e.metricaId); return (m?m.nome:"métrica") + ": " + mensagemErroAvaliacao(e.err); });
+        mostrarToast("Avaliação salva, mas "+erros.length+" medida(s) não foram gravadas — " + nomes.join("; "));
+      } else {
+        mostrarToast("Avaliação salva.");
+      }
+    } catch(err){
+      console.error(err);
+      mostrarToast(mensagemErroAvaliacao(err));
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  async function recarregarAvaliacoesFisicas(){
+    var af = await sb.from("avaliacoes_fisicas").select("*").eq("professor_id", usuarioId).order("data_avaliacao", { ascending: false });
+    if (!af.error) state.avaliacoesFisicas = (af.data || []).map(rowToAvaliacao);
+    var afi = await sb.from("avaliacoes_fisicas_itens").select("*");
+    if (!afi.error) state.avaliacoesFisicasItens = (afi.data || []).map(rowToItemAvaliacao);
+    var mc = await sb.from("metricas_catalogo").select("*").order("categoria").order("nome_exibicao");
+    if (!mc.error) state.metricasCatalogo = (mc.data || []).map(rowToMetrica);
+  }
+
+  window.confirmarExcluirAvaliacao = function(id){
+    pedirConfirmacao(
+      "Excluir avaliação",
+      "A avaliação some da lista e da visão do aluno, mas o histórico fica preservado e você pode restaurar depois. Tem certeza?",
+      "Excluir",
+      function(){ excluirAvaliacao(id); }
+    );
+  };
+  window.excluirAvaliacao = async function(id){
+    try {
+      var r = await sb.from("avaliacoes_fisicas").update({ excluida_em: new Date().toISOString() }).eq("id", id);
+      if (r.error) throw r.error;
+      await recarregarAvaliacoesFisicas();
+      var av = getAvaliacao(id);
+      renderAll();
+      if (av) abrirDetalheAluno(av.alunoId);
+      mostrarToast("Avaliação excluída.");
+    } catch(err){ console.error(err); mostrarToast(mensagemErroAvaliacao(err)); }
+  };
+  window.restaurarAvaliacao = async function(id){
+    try {
+      var r = await sb.from("avaliacoes_fisicas").update({ excluida_em: null }).eq("id", id);
+      if (r.error) throw r.error;
+      await recarregarAvaliacoesFisicas();
+      var av = getAvaliacao(id);
+      renderAll();
+      if (av) abrirDetalheAluno(av.alunoId);
+      mostrarToast("Avaliação restaurada.");
+    } catch(err){ console.error(err); mostrarToast(mensagemErroAvaliacao(err)); }
+  };
+
+  function renderCardAvaliacao(av){
+    var itens = itensDaAvaliacao(av.id);
+    var excluida = !!av.excluidaEm;
+    var html = '<div class="card'+(excluida ? ' ghost' : '')+'">';
+    html += '<div class="card-row"><div class="card-main"><div class="card-title">'+fmtDataBR(av.data)+'</div>';
+    if (av.aulaId) html += '<div class="card-sub">Lançada durante uma aula</div>';
+    if (excluida) html += '<div class="card-sub">Excluída</div>';
+    html += '</div></div>';
+    if (itens.length === 0){
+      html += '<div class="card-sub">Sem medidas lançadas.</div>';
+    } else {
+      html += '<div class="aval-itens-grid">';
+      itens.forEach(function(it){
+        var m = getMetrica(it.metricaId);
+        html += '<div class="aval-item"><span class="card-sub">'+(m?esc(m.nome):"?")+'</span><span>'+it.valor+' '+(m?esc(m.unidade):it.unidade)+'</span></div>';
+      });
+      html += '</div>';
+    }
+    if (av.observacoes) html += '<div class="card-sub" style="margin-top:6px;">'+esc(av.observacoes)+'</div>';
+    html += '<div class="action-row" style="margin-top:6px;">';
+    if (excluida){
+      html += '<button class="btn sm ghost" onclick="restaurarAvaliacao(\''+av.id+'\')">Restaurar</button>';
+    } else {
+      html += '<button class="btn sm" onclick="abrirModalAvaliacao(\''+av.alunoId+'\',\''+av.id+'\')">'+ICONS.edit+' Editar</button>';
+      html += '<button class="btn sm ghost" onclick="confirmarExcluirAvaliacao(\''+av.id+'\')">Excluir</button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
   // ---------- detalhe do aluno ----------
   window.abrirDetalheAluno = function(id){
     var aluno = getAluno(id);
@@ -2239,6 +2615,15 @@ import './styles.css';
         html += '<div class="action-row"><button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' '+(p.status==="pago"?"Ver recibo":"Ver cobrança")+'</button></div>';
         html += '</div>';
       });
+    }
+
+    html += '<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">Avaliação física';
+    html += '<button class="btn sm" onclick="abrirModalAvaliacao(\''+aluno.id+'\')">'+ICONS.edit+' Nova avaliação</button></div>';
+    var avaliacoesDoAlunoAtivas = avaliacoesDoAluno(id, true);
+    if (avaliacoesDoAlunoAtivas.length === 0){
+      html += '<div class="empty-state"><div class="display">Nenhuma avaliação ainda</div>Registre a primeira avaliação física deste aluno.</div>';
+    } else {
+      avaliacoesDoAlunoAtivas.forEach(function(av){ html += renderCardAvaliacao(av); });
     }
 
     el.innerHTML = html;

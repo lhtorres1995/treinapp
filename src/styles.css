@@ -152,6 +152,16 @@
   }
   .card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .card-main { min-width: 0; }
+  .card.ghost { opacity: 0.55; }
+
+  .aval-itens-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px,1fr));
+    gap: 4px 10px;
+    margin-top: 6px;
+  }
+  .aval-item { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; }
+  .aval-extra-linha { align-items: center; }
   .card-title { font-weight: 700; font-size: 14px; }
   .card-sub { font-size: 12px; color: var(--fg-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
