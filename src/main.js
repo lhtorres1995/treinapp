@@ -22,7 +22,26 @@ import './styles.css';
     x: '<svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     alert: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L2 20h20L12 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v4M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     user: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.6" stroke="currentColor" stroke-width="2"/><path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    calendar: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    calendar: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    // Ícones da avaliação física: desenhos próprios, mesmo estilo de traço do
+    // restante do app — inspirados no mockup aprovado, não extraídos dele.
+    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M12 19V5M20 19v-7"/><path d="M4 19h16"/></svg>',
+    layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>',
+    grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>',
+    // Pacote de ícones oficial (LT360_Icones_Avaliacao_Fisica) — SVGs originais,
+    // reutilizados como vieram (currentColor, stroke-width 1.8).
+    pesoM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7a4 4 0 0 1 8 0"/><path d="M6 7h12l3 13H3L6 7Z"/><path d="m12 10 2 3-2 2"/></svg>',
+    alturaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v18M4 6l3-3 3 3M4 18l3 3 3-3"/><path d="M13 4h7M13 9h4M13 14h7M13 19h4"/></svg>',
+    bracoM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c2-1 3-4 5-5l2-2 2 2 2-4c.6-1.4 2.7-1.2 3 .3l-1 6c-.6 3-3.5 5-7 5H5Z"/><path d="M9 13c1 1 2 2 4 2"/></svg>',
+    coxaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h9l1 6-3 5-2 7h-5l1-9-2-5Z"/><path d="M8 9h9"/></svg>',
+    panturrilhaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3c-1 4-2 6-1 9l2 3-1 6h5l1-6 2-4-1-8"/><path d="M8 12c3 2 5 2 8-1"/></svg>',
+    cinturaM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3c1 4 2 5 2 9s-1 5-2 9M18 3c-1 4-2 5-2 9s1 5 2 9"/><path d="M8 9c2 1 6 1 8 0M8 15c2-1 6-1 8 0"/></svg>',
+    peitoralM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4 3 10l4 11h10l4-11-2-6-5 3-2 4-2-4Z"/><path d="M12 11v10"/></svg>',
+    abdomenM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3 5 9l2 12h10l2-12-2-6"/><path d="M9 8h6M9 12h6M9 16h6M12 8v12"/></svg>',
+    gorduraM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-3 5-7 8-7 12a7 7 0 0 0 14 0c0-4-4-7-7-12Z"/><path d="M9 16l6-6"/><circle cx="9" cy="11" r=".8"/><circle cx="15" cy="16" r=".8"/></svg>',
+    // Genéricos: usados só quando não há ícone específico no pacote (ex.: quadril, métricas custom).
+    percentM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7.5" r="2.3"/><circle cx="17" cy="16.5" r="2.3"/><path d="M18 6 6 18"/></svg>',
+    perimetroM: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 3.3V6M12 18v2.7M3.3 12H6M18 12h2.7"/></svg>'
   };
   var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
   var MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -2180,6 +2199,10 @@ import './styles.css';
   // ---------- avaliação física ----------
   var editingAvaliacaoId = null;
   var editingAvaliacaoAlunoId = null;
+  var detalheAlunoId = null;        // aluno atualmente aberto no detalhe (p/ resetar a aba ao trocar)
+  var detalheAlunoAba = "geral";    // geral | avaliacoes | aulas | financeiro
+  var alunoAvalMetricaSel = null;   // métrica escolhida no seletor do gráfico de evolução
+  var alunoAvalExpandidas = {};     // {avaliacaoId: true/false} — cards abertos/fechados na aba de avaliações
 
   function normalizarCodigoMetrica(nome){
     return (nome || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -2201,8 +2224,380 @@ import './styles.css';
   function avaliacoesDoAluno(alunoId, incluirExcluidas){
     return state.avaliacoesFisicas
       .filter(function(a){ return a.alunoId === alunoId && (incluirExcluidas || !a.excluidaEm); })
-      .sort(function(a,b){ return a.data < b.data ? 1 : -1; });
+      .sort(compararAvaliacoesDesc);
   }
+  // Mais recente primeiro; em caso de mesma data (duas avaliações no mesmo
+  // dia) desempata por created_at — nunca por um horário inventado.
+  function compararAvaliacoesDesc(a,b){
+    if (a.data !== b.data) return a.data < b.data ? 1 : -1;
+    var ca = a.createdAt || "", cb = b.createdAt || "";
+    if (ca !== cb) return ca < cb ? 1 : -1;
+    return 0;
+  }
+  function dataLocalDeISO(iso){
+    try{ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(iso)); }
+    catch(e){ return null; }
+  }
+  function horaLocalDeISO(iso){
+    try{ return new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}); }
+    catch(e){ return ""; }
+  }
+  // Só mostramos horário quando ele é confiável: created_at (quando a
+  // avaliação foi de fato lançada no sistema) cai no mesmo dia-calendário que
+  // data_avaliacao (o dia a que ela se refere). Se foi lançada com data
+  // retroativa, não sabemos a que horas aconteceu — mostramos só a data.
+  function rotuloDataAvaliacao(av){
+    var dataBR = fmtDataBR(av.data);
+    if (av.createdAt && dataLocalDeISO(av.createdAt) === av.data) return dataBR + " às " + horaLocalDeISO(av.createdAt);
+    return dataBR;
+  }
+  function fmtNumPt(v){
+    var n = Math.round(Number(v)*100)/100;
+    return n.toString().replace(".", ",");
+  }
+  // Ícone específico por código quando o pacote oferece um; cai para o
+  // genérico de perímetro (quadril, custom) ou de bioimpedância (custom).
+  var ICONE_POR_CODIGO = {
+    peso: "pesoM", altura: "alturaM",
+    braco_direito: "bracoM", braco_esquerdo: "bracoM",
+    coxa_direita: "coxaM", coxa_esquerda: "coxaM",
+    panturrilha_direita: "panturrilhaM", panturrilha_esquerda: "panturrilhaM",
+    cintura_escapular: "cinturaM", peitoral: "peitoralM", abdomen: "abdomenM",
+    percentual_gordura_corporal: "gorduraM"
+  };
+  function iconMetrica(m){
+    if (!m) return ICONS.percentM;
+    var chave = ICONE_POR_CODIGO[m.codigo];
+    if (chave) return ICONS[chave];
+    if (m.categoria === "perimetro") return ICONS.perimetroM;
+    return ICONS.percentM; // bioimpedância / custom sem ícone específico
+  }
+  // "Principais medidas": peso e altura sempre aparecem (com placeholder se
+  // não lançados nesta avaliação) + até 2 outras métricas realmente medidas,
+  // priorizando categoria (peso_altura > perímetro > bioimpedância > custom)
+  // e depois nome — mesma prioridade usada no catálogo.
+  function principaisMetricasAvaliacao(itens){
+    var ordem = { peso_altura:0, perimetro:1, bioimpedancia:2, custom:3 };
+    var porMetricaId = {};
+    itens.forEach(function(it){ porMetricaId[it.metricaId] = it; });
+    var destaque = [];
+    ["peso","altura"].forEach(function(cod){
+      var m = state.metricasCatalogo.filter(function(x){ return x.codigo===cod; })[0];
+      if (!m) return;
+      destaque.push({ metrica:m, item: porMetricaId[m.id] || null });
+    });
+    var jaUsados = {};
+    destaque.forEach(function(d){ jaUsados[d.metrica.id] = true; });
+    var outros = itens.filter(function(it){ return !jaUsados[it.metricaId]; }).sort(function(a,b){
+      var ma = getMetrica(a.metricaId), mb = getMetrica(b.metricaId);
+      var oa = ordem[ma.categoria]===undefined?9:ordem[ma.categoria], ob = ordem[mb.categoria]===undefined?9:ordem[mb.categoria];
+      if (oa !== ob) return oa - ob;
+      return ma.nome < mb.nome ? -1 : (ma.nome > mb.nome ? 1 : 0);
+    });
+    outros.slice(0,2).forEach(function(it){ destaque.push({ metrica: getMetrica(it.metricaId), item: it }); });
+    return destaque;
+  }
+  // Gráfico de evolução: área + linha + grid + rótulo de valor em cada ponto.
+  // Cor única e neutra (var(--accent)) — nunca verde/vermelho: uma métrica
+  // subir ou cair não é por si só "bom" ou "ruim" (depende do objetivo do aluno).
+  // Rótulo com "chip" de fundo (evita colidir visualmente com grade/linha/eixo
+  // atrás dele — o rect é opaco e desenhado por cima de tudo, então sempre
+  // cobre o que estiver embaixo do texto).
+  function svgChip(px, py, texto, anchor, opts){
+    opts = opts || {};
+    var fontSize = opts.fontSize || 11;
+    var peso = opts.bold ? 700 : 600;
+    var w = Math.max(fontSize*1.6, texto.length*fontSize*0.62 + 10);
+    var h = fontSize + 7;
+    var rectX = anchor==="start" ? px-4 : (anchor==="end" ? px-w+4 : px-w/2);
+    var rectY = py - fontSize - 1;
+    return '<rect x="'+rectX+'" y="'+rectY+'" width="'+w+'" height="'+h+'" rx="4" fill="'+(opts.fill||"var(--surface)")+'"></rect>'+
+      '<text x="'+px+'" y="'+py+'" font-size="'+fontSize+'" font-weight="'+peso+'" fill="'+(opts.color||"var(--fg)")+'" text-anchor="'+anchor+'">'+esc(texto)+'</text>';
+  }
+  function svgEvolucao(pontos, unidade, gradId){
+    var w=640, h=230, padL=44, padR=20, padT=30, padB=44;
+    var areaW = w-padL-padR, areaH = h-padT-padB;
+    var valores = pontos.map(function(p){ return p.valor; });
+    var min = Math.min.apply(null, valores), max = Math.max.apply(null, valores);
+    if (min === max){ min -= 1; max += 1; }
+    var folga = (max-min)*0.15; min -= folga; max += folga;
+    var n = pontos.length;
+    function x(i){ return padL + (n===1 ? areaW/2 : i*areaW/(n-1)); }
+    function y(v){ return padT + (max-v)/(max-min)*areaH; }
+
+    var nTicks = 5, grid = "", labelsY = "";
+    for (var t=0;t<nTicks;t++){
+      var v = max - (max-min)*t/(nTicks-1);
+      var yy = padT + t*areaH/(nTicks-1);
+      grid += '<line x1="'+padL+'" y1="'+yy+'" x2="'+(w-padR)+'" y2="'+yy+'" stroke="var(--border)" stroke-width="1"></line>';
+      labelsY += '<text x="'+(padL-8)+'" y="'+(yy+3)+'" font-size="10" fill="var(--fg-muted)" text-anchor="end">'+fmtNumPt(v)+'</text>';
+    }
+
+    var linePts = pontos.map(function(p,i){ return x(i)+","+y(p.valor); }).join(" ");
+    var areaPts = linePts+" "+x(n-1)+","+(h-padB)+" "+x(0)+","+(h-padB);
+
+    // Rótulos do eixo X: se os pontos estiverem muito próximos, mostra só
+    // alguns (sempre o primeiro e o último) para não empilhar texto.
+    var minSpacing = 58;
+    var step = n>1 ? Math.max(1, Math.ceil(minSpacing / (areaW/(n-1)))) : 1;
+
+    var dots="", valueLabels="", xLabels="";
+    pontos.forEach(function(p,i){
+      var px=x(i), py=y(p.valor);
+      var rotulo = rotuloDataAvaliacao(p.av);
+      var tituloAcessivel = rotulo+": "+fmtNumPt(p.valor)+" "+unidade;
+      dots += '<circle cx="'+px+'" cy="'+py+'" r="5" tabindex="0" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"><title>'+esc(tituloAcessivel)+'</title></circle>';
+      var anchorV = i===0 ? "start" : (i===n-1 ? "end" : "middle");
+      valueLabels += svgChip(px, py-14, fmtNumPt(p.valor)+" "+unidade, anchorV, { bold:true });
+      if (i===0 || i===n-1 || i%step===0){
+        var partes = rotulo.split(" às ");
+        var anchorX = i===0 ? "start" : (i===n-1 ? "end" : "middle");
+        xLabels += '<text x="'+px+'" y="'+(h-padB+17)+'" font-size="10" fill="var(--fg-muted)" text-anchor="'+anchorX+'">'+esc(partes[0])+'</text>';
+        if (partes[1]) xLabels += '<text x="'+px+'" y="'+(h-padB+30)+'" font-size="10" fill="var(--fg-muted)" text-anchor="'+anchorX+'">'+esc(partes[1])+'</text>';
+      }
+    });
+
+    return '<svg class="aval-chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" style="width:100%;height:230px;display:block;" role="group" aria-label="Gráfico de evolução de '+esc(unidade)+'">'+
+      '<defs><linearGradient id="'+gradId+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"></stop>'+
+      '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0"></stop></linearGradient></defs>'+
+      grid+labelsY+
+      '<polygon points="'+areaPts+'" fill="url(#'+gradId+')"></polygon>'+
+      '<polyline points="'+linePts+'" fill="none" stroke="var(--accent)" stroke-width="2.5"></polyline>'+
+      dots+valueLabels+xLabels+'</svg>';
+  }
+  function screenAvaliacoesFisicasTab(aluno){
+    var lista = avaliacoesDoAluno(aluno.id, true); // mais recentes primeiro; inclui excluídas
+    var ativas = lista.filter(function(a){ return !a.excluidaEm; });
+
+    var html = '<div class="action-row" style="justify-content:flex-end;margin-bottom:4px;">';
+    html += '<button class="btn primary" onclick="abrirModalAvaliacao(\''+aluno.id+'\')">'+ICONS.edit+' Nova avaliação</button></div>';
+
+    if (lista.length === 0){
+      html += '<div class="empty-state"><div class="display">Nenhuma avaliação ainda</div>Registre a primeira avaliação física deste aluno.</div>';
+      return html;
+    }
+
+    var ultima = ativas[0] || lista[0];
+    var primeira = ativas[ativas.length-1] || lista[lista.length-1];
+    html += '<div class="stat-row aval-indicadores">';
+    html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.calendar+'</span><div><div class="stat-value sm">'+rotuloDataAvaliacao(ultima)+'</div><div class="stat-label">Última avaliação</div></div></div>';
+    html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.layers+'</span><div><div class="stat-value sm">'+ativas.length+'</div><div class="stat-label">Total de avaliações</div></div></div>';
+    html += '<div class="stat-card with-ic"><span class="stat-ic-badge">'+ICONS.calendar+'</span><div><div class="stat-value sm">'+fmtDataBR(primeira.data)+' – '+fmtDataBR(ultima.data)+'</div><div class="stat-label">Período</div></div></div>';
+    html += '</div>';
+
+    // Evolução: só vira opção no seletor a métrica com pelo menos 2 pontos
+    // entre as avaliações ativas deste aluno.
+    var contagem = {};
+    ativas.forEach(function(av){ itensDaAvaliacao(av.id).forEach(function(it){ contagem[it.metricaId]=(contagem[it.metricaId]||0)+1; }); });
+    var metricasComEvolucao = state.metricasCatalogo.filter(function(m){ return contagem[m.id] >= 2; });
+    if (metricasComEvolucao.length){
+      if (!alunoAvalMetricaSel || !contagem[alunoAvalMetricaSel]){
+        var peso = metricasComEvolucao.filter(function(m){ return m.codigo==="peso"; })[0];
+        alunoAvalMetricaSel = (peso || metricasComEvolucao[0]).id;
+      }
+      var metricaAtiva = getMetrica(alunoAvalMetricaSel);
+      var pontos = ativas.slice().reverse().map(function(av){
+        var it = itensDaAvaliacao(av.id).filter(function(x){ return x.metricaId===alunoAvalMetricaSel; })[0];
+        return it ? { av:av, valor:it.valor } : null;
+      }).filter(Boolean);
+      var opcoes = metricasComEvolucao.map(function(m){
+        return '<option value="'+m.id+'"'+(m.id===alunoAvalMetricaSel?' selected':'')+'>'+esc(m.nome)+' ('+esc(m.unidade)+')</option>';
+      }).join('');
+      html += '<div class="card"><div class="aval-card-head"><h3 class="section-title" style="margin:0;">Evolução</h3>'+
+        '<select class="tool-select" onchange="setAlunoAvalMetrica(\''+aluno.id+'\',this.value)">'+opcoes+'</select></div>'+
+        svgEvolucao(pontos, metricaAtiva.unidade, "avalGradP-"+alunoAvalMetricaSel)+'</div>';
+    }
+
+    html += '<div class="section-title">Avaliações ('+lista.length+')</div>';
+    lista.forEach(function(av, i){
+      var aberto = Object.prototype.hasOwnProperty.call(alunoAvalExpandidas, av.id) ? alunoAvalExpandidas[av.id] : (i===0);
+      html += cardAvaliacaoExpansivel(av, aberto, i, lista);
+    });
+    return html;
+  }
+  function cardAvaliacaoExpansivel(av, aberto, index, listaCompleta){
+    var itens = itensDaAvaliacao(av.id);
+    var excluida = !!av.excluidaEm;
+    var anterior = listaCompleta[index+1] || null;
+    var itensAnterior = anterior ? itensDaAvaliacao(anterior.id) : [];
+    var principais = principaisMetricasAvaliacao(itens);
+
+    var html = '<div class="card aval-exp-card'+(excluida ? ' ghost' : '')+'">';
+    html += '<div class="card-row">';
+    html += '<div class="aval-exp-clicavel" onclick="toggleAlunoAvalExpandida(\''+av.alunoId+'\',\''+av.id+'\','+(aberto?'true':'false')+')">';
+    html += '<span class="aval-hist-ic">'+ICONS.calendar+'</span>';
+    html += '<div class="aval-exp-info"><div class="card-title">'+rotuloDataAvaliacao(av)+'</div>';
+    html += '<div class="card-sub">'+(excluida ? "Excluída" : (av.aulaId ? "Lançada durante uma aula" : "Lançada fora de aula"))+'</div></div>';
+    html += '<span class="aval-hist-chev'+(aberto?' aberto':'')+'">'+ICONS.chevD+'</span>';
+    html += '</div>';
+    html += '<div class="action-row" style="margin-top:0;flex:none;">';
+    if (excluida){
+      html += '<button class="btn sm ghost" onclick="event.stopPropagation();restaurarAvaliacao(\''+av.id+'\')">Restaurar</button>';
+    } else {
+      html += '<button class="btn sm ghost" onclick="event.stopPropagation();abrirRelatorioAvaliacao(\''+av.id+'\')" title="Gerar PDF para enviar ao aluno">'+ICONS.print+' PDF</button>';
+      html += '<button class="btn sm" onclick="event.stopPropagation();abrirModalAvaliacao(\''+av.alunoId+'\',\''+av.id+'\')">'+ICONS.edit+' Editar</button>';
+      html += '<button class="btn sm ghost" onclick="event.stopPropagation();confirmarExcluirAvaliacao(\''+av.id+'\')">Excluir</button>';
+    }
+    html += '</div></div>';
+
+    if (aberto){
+      if (itens.length === 0){
+        html += '<div class="card-sub" style="margin-top:10px;">Sem medidas lançadas.</div>';
+      } else {
+        html += '<div class="aval-exp-cols">';
+        html += '<div><div class="aval-exp-col-title">Principais medidas</div>';
+        principais.forEach(function(d){
+          var nomeHtml = '<span class="aval-row-label"><span class="aval-row-ic">'+iconMetrica(d.metrica)+'</span><span class="nome">'+esc(d.metrica.nome)+'</span></span>';
+          if (!d.item){
+            html += '<div class="aval-exp-row">'+nomeHtml+'<span class="valor" style="color:var(--fg-muted);font-weight:600;">Não informado</span></div>';
+            return;
+          }
+          var ant = itensAnterior.filter(function(x){ return x.metricaId===d.item.metricaId; })[0];
+          var deltaHtml = "";
+          if (ant){
+            var delta = d.item.valor - ant.valor;
+            deltaHtml = Math.abs(delta) < 0.005
+              ? '<span class="delta neutro">(—)</span>'
+              : '<span class="delta">('+(delta>0?"+":"")+fmtNumPt(delta)+' '+esc(d.item.unidade)+')</span>';
+          }
+          html += '<div class="aval-exp-row">'+nomeHtml+'<span><span class="valor">'+fmtNumPt(d.item.valor)+' '+esc(d.item.unidade)+'</span>'+deltaHtml+'</span></div>';
+        });
+        html += '</div>';
+        html += '<div><div class="aval-exp-col-title">Todas as medidas</div><div class="aval-exp-col-todas">';
+        itens.forEach(function(it){
+          var m = getMetrica(it.metricaId);
+          html += '<div class="aval-exp-row"><span class="nome">'+(m?esc(m.nome):"?")+'</span><span class="valor">'+fmtNumPt(it.valor)+' '+(m?esc(m.unidade):it.unidade)+'</span></div>';
+        });
+        html += '</div></div>';
+        html += '</div>';
+      }
+      if (av.observacoes) html += '<div class="card-sub aval-exp-obs">'+esc(av.observacoes)+'</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+  // ---------- relatório de avaliação física em PDF (mesmo padrão visual do recibo) ----------
+  var relatorioAvaliacaoAtualId = null;
+  window.abrirRelatorioAvaliacao = function(avaliacaoId){
+    var av = getAvaliacao(avaliacaoId);
+    if (!av) return;
+    relatorioAvaliacaoAtualId = avaliacaoId;
+
+    var aluno = getAluno(av.alunoId);
+    var prof = state.professor;
+    var itens = itensDaAvaliacao(av.id);
+    var ordem = { peso_altura:0, perimetro:1, bioimpedancia:2, custom:3 };
+    var itensOrdenados = itens.slice().sort(function(a,b){
+      var ma = getMetrica(a.metricaId), mb = getMetrica(b.metricaId);
+      var oa = ma ? (ordem[ma.categoria]===undefined?9:ordem[ma.categoria]) : 9;
+      var ob = mb ? (ordem[mb.categoria]===undefined?9:ordem[mb.categoria]) : 9;
+      if (oa !== ob) return oa - ob;
+      var na = ma ? ma.nome : "", nb = mb ? mb.nome : "";
+      return na < nb ? -1 : (na > nb ? 1 : 0);
+    });
+
+    var logoHtml = prof.logo
+      ? '<img class="recibo-logo" src="'+esc(prof.logo)+'" alt="Logo">'
+      : '<div class="recibo-logo-placeholder">'+iniciais(prof.nome||"PT")+'</div>';
+
+    var itensHtml = itensOrdenados.length
+      ? itensOrdenados.map(function(it){
+          var m = getMetrica(it.metricaId);
+          return '<div class="recibo-item"><span class="recibo-item-dia">'+(m?esc(m.nome):"?")+'</span><span>'+fmtNumPt(it.valor)+' '+(m?esc(m.unidade):it.unidade)+'</span></div>';
+        }).join("")
+      : '<div class="recibo-item"><span class="recibo-item-dia">Nenhuma medida lançada.</span></div>';
+
+    var html = '<div class="recibo-doc">';
+    html += '<div class="recibo-brandbar"><div class="recibo-wordmark">LT<span class="accent">360</span></div>'+
+      '<div class="recibo-status-pill info">'+ICONS.chart+'Avaliação física</div></div>';
+    html += '<div class="recibo-tagline">Gestão para Personal Trainers</div>';
+    html += '<div class="recibo-titulo">Relatório de avaliação física</div>';
+    html += '<div class="recibo-top-grid">';
+    // Sem Pix aqui (diferente do recibo de cobrança): este documento não é
+    // financeiro, não faz sentido mostrar dado de pagamento.
+    html += '<div class="recibo-prof-row">'+logoHtml+
+      '<div class="recibo-prof-info"><div class="recibo-prof-label">Personal Trainer</div>'+
+      '<div class="recibo-prof-nome">'+esc(prof.nome||"Personal Trainer")+'</div>'+
+      '<div class="recibo-prof-meta">'+(prof.telefone ? ("Tel: "+esc(prof.telefone)) : "")+'</div></div></div>';
+    html += '<div class="recibo-info-grid">'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.user+'</span><div><span class="recibo-info-label">Aluno</span><span class="recibo-info-valor">'+esc(aluno?aluno.nome:"—")+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.calendar+'</span><div><span class="recibo-info-label">Data da avaliação</span><span class="recibo-info-valor">'+rotuloDataAvaliacao(av)+'</span></div></div>'+
+      '<div class="recibo-info-item"><span class="recibo-info-ic">'+ICONS.recibo+'</span><div><span class="recibo-info-label">Contexto</span><span class="recibo-info-valor">'+(av.aulaId?"Lançada durante uma aula":"Lançada fora de aula")+'</span></div></div>'+
+      '</div>';
+    html += '</div>';
+    html += '<div class="recibo-itens-titulo">Medidas registradas</div>';
+    html += '<div class="recibo-itens-lista'+(itensOrdenados.length>=6 ? ' cols-2' : '')+'">'+itensHtml+'</div>';
+    if (av.observacoes){
+      html += '<div class="recibo-itens-titulo" style="margin-top:16px;">Observações</div>';
+      html += '<div class="recibo-item"><span class="recibo-item-dia">'+esc(av.observacoes)+'</span></div>';
+    }
+    html += '<div class="recibo-footer">Relatório emitido em '+fmtDataBR(fmtData(hoje))+' pelo LT360.</div>';
+    html += '</div>';
+
+    document.getElementById("relatorio-avaliacao-conteudo").innerHTML = html;
+    abrirModal("modal-relatorio-avaliacao");
+  };
+
+  window.baixarRelatorioAvaliacaoPDF = function(){
+    var original = document.querySelector("#relatorio-avaliacao-conteudo .recibo-doc");
+    if (!original || typeof html2pdf === "undefined"){
+      mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
+      return;
+    }
+    var av = getAvaliacao(relatorioAvaliacaoAtualId);
+    var aluno = av ? getAluno(av.alunoId) : null;
+    var nomeArquivo = "avaliacao-"+(aluno ? aluno.nome.replace(/\s+/g,"-").toLowerCase() : "aluno")+(av ? ("-"+av.data) : "")+".pdf";
+
+    // Mesmo mecanismo do recibo: largura fixa, altura calculada a partir do
+    // canvas renderizado (sem página A4 fixa, sem sobra em branco), gerado
+    // num clone fora da tela para não alterar o modal em exibição.
+    var PDF_WIDTH_PX = 640;
+    var MARGIN_MM = 10;
+    var SCALE = 2;
+    var PX_TO_MM = 25.4 / 96;
+
+    var clone = original.cloneNode(true);
+    clone.classList.add("recibo-pdf-mode");
+    var wrap = document.createElement("div");
+    wrap.style.position = "fixed";
+    wrap.style.left = "-10000px";
+    wrap.style.top = "0";
+    wrap.style.width = PDF_WIDTH_PX + "px";
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+
+    function limpar(){ if (wrap.parentNode) document.body.removeChild(wrap); }
+
+    var worker = html2pdf().set({
+      filename: nomeArquivo,
+      margin: MARGIN_MM,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: SCALE, backgroundColor: "#f4f4f6", windowWidth: PDF_WIDTH_PX },
+      jsPDF: { unit: "mm", format: [PDF_WIDTH_PX * PX_TO_MM + MARGIN_MM * 2, 1000], orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all"] }
+    }).from(clone);
+
+    worker.toCanvas().then(function(){
+      var canvas = worker.prop.canvas;
+      var widthPx = canvas.width / SCALE;
+      var heightPx = (canvas.height / SCALE) + 2;
+      var pageWidthMM = widthPx * PX_TO_MM + MARGIN_MM * 2;
+      var pageHeightMM = heightPx * PX_TO_MM + MARGIN_MM * 2;
+      worker.prop.pageSize = null;
+      return worker.set({
+        jsPDF: { unit: "mm", format: [pageWidthMM, pageHeightMM], orientation: pageWidthMM >= pageHeightMM ? "landscape" : "portrait" }
+      }).toPdf();
+    }).then(function(){
+      return worker.save();
+    }).then(limpar).catch(function(){
+      limpar();
+      mostrarToast("Não foi possível gerar o PDF agora. Tente novamente.");
+    });
+  };
+
+  window.setAlunoAvalMetrica = function(alunoId, id){ alunoAvalMetricaSel = id; abrirDetalheAluno(alunoId); };
+  window.toggleAlunoAvalExpandida = function(alunoId, id, estavaAberta){ alunoAvalExpandidas[id] = !estavaAberta; abrirDetalheAluno(alunoId); };
 
   // Mensagens amigáveis para os códigos de erro das triggers de validação
   // (ver migração 0007_avaliacoes_fisicas.sql).
@@ -2235,6 +2630,7 @@ import './styles.css';
 
   window.salvarMetricaCustom = async function(ev){
     ev.preventDefault();
+    var categoria = document.getElementById("f-metrica-categoria").value;
     var nome = document.getElementById("f-metrica-nome").value.trim();
     var unidade = document.getElementById("f-metrica-unidade").value.trim();
     var min = document.getElementById("f-metrica-min").value;
@@ -2248,13 +2644,18 @@ import './styles.css';
     try {
       var r = await sb.from("metricas_catalogo").insert({
         professor_id: usuarioId, metrica_codigo: codigo, nome_exibicao: nome,
-        categoria: "custom", unidade_padrao: unidade,
+        categoria: categoria, unidade_padrao: unidade,
         valor_min: min === "" ? null : Number(min), valor_max: max === "" ? null : Number(max)
       }).select("*").single();
       if (r.error) throw r.error;
-      state.metricasCatalogo.push(rowToMetrica(r.data));
+      var novaMetrica = rowToMetrica(r.data);
+      state.metricasCatalogo.push(novaMetrica);
       fecharModal("modal-metrica-nova");
-      adicionarLinhaMetricaExtra(null, r.data.id);
+      // Perímetro entra no grupo fixo (igual às demais); as outras categorias
+      // (bioimpedância/personalizada) entram como linha extra — sem reconstruir
+      // os grupos fixos, para não perder valores que o professor já tenha digitado.
+      if (categoria === "perimetro") adicionarCampoFixo(novaMetrica);
+      else adicionarLinhaMetricaExtra(null, r.data.id);
       mostrarToast("Métrica \""+nome+"\" criada.");
     } catch(err){
       console.error(err);
@@ -2301,6 +2702,18 @@ import './styles.css';
       });
       el.innerHTML = html;
     });
+  }
+  // Acrescenta um campo ao grupo fixo (peso_altura/perimetro) sem reconstruir
+  // o grupo inteiro — usado ao criar uma métrica de perímetro nova no meio do
+  // preenchimento da avaliação, para não perder valores já digitados.
+  function adicionarCampoFixo(m){
+    var el = document.getElementById("aval-grupo-" + m.categoria);
+    if (!el) return;
+    var div = document.createElement("div");
+    div.className = "field";
+    div.innerHTML = '<label>'+esc(m.nome)+' ('+esc(m.unidade)+')</label>' +
+      '<input type="number" step="any" class="aval-fixo-input" data-metrica-id="'+m.id+'" data-unidade="'+esc(m.unidade)+'" value="">';
+    el.appendChild(div);
   }
 
   window.abrirModalAvaliacao = function(alunoId, avaliacaoId){
@@ -2483,36 +2896,6 @@ import './styles.css';
     } catch(err){ console.error(err); mostrarToast(mensagemErroAvaliacao(err)); }
   };
 
-  function renderCardAvaliacao(av){
-    var itens = itensDaAvaliacao(av.id);
-    var excluida = !!av.excluidaEm;
-    var html = '<div class="card'+(excluida ? ' ghost' : '')+'">';
-    html += '<div class="card-row"><div class="card-main"><div class="card-title">'+fmtDataBR(av.data)+'</div>';
-    if (av.aulaId) html += '<div class="card-sub">Lançada durante uma aula</div>';
-    if (excluida) html += '<div class="card-sub">Excluída</div>';
-    html += '</div></div>';
-    if (itens.length === 0){
-      html += '<div class="card-sub">Sem medidas lançadas.</div>';
-    } else {
-      html += '<div class="aval-itens-grid">';
-      itens.forEach(function(it){
-        var m = getMetrica(it.metricaId);
-        html += '<div class="aval-item"><span class="card-sub">'+(m?esc(m.nome):"?")+'</span><span>'+it.valor+' '+(m?esc(m.unidade):it.unidade)+'</span></div>';
-      });
-      html += '</div>';
-    }
-    if (av.observacoes) html += '<div class="card-sub" style="margin-top:6px;">'+esc(av.observacoes)+'</div>';
-    html += '<div class="action-row" style="margin-top:6px;">';
-    if (excluida){
-      html += '<button class="btn sm ghost" onclick="restaurarAvaliacao(\''+av.id+'\')">Restaurar</button>';
-    } else {
-      html += '<button class="btn sm" onclick="abrirModalAvaliacao(\''+av.alunoId+'\',\''+av.id+'\')">'+ICONS.edit+' Editar</button>';
-      html += '<button class="btn sm ghost" onclick="confirmarExcluirAvaliacao(\''+av.id+'\')">Excluir</button>';
-    }
-    html += '</div></div>';
-    return html;
-  }
-
   // ---------- detalhe do aluno ----------
   window.abrirDetalheAluno = function(id){
     var aluno = getAluno(id);
@@ -2526,6 +2909,16 @@ import './styles.css';
     document.getElementById("alunos-lista-view").hidden = true;
     var el = document.getElementById("alunos-detalhe-view");
     el.hidden = false;
+
+    // Trocar de aluno reseta a aba e os estados de UI da aba de avaliações
+    // (seletor de métrica, cards expandidos) para não vazar estado de um
+    // aluno para outro.
+    if (detalheAlunoId !== id){
+      detalheAlunoAba = "geral";
+      alunoAvalMetricaSel = null;
+      alunoAvalExpandidas = {};
+    }
+    detalheAlunoId = id;
 
     var aulasDoAluno = state.aulas.filter(function(c){return c.alunoId===id;})
       .sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? 1 : -1; });
@@ -2546,18 +2939,15 @@ import './styles.css';
     html += '<button class="back-btn" onclick="voltarListaAlunos()">'+ICONS.chevL+' Alunos</button>';
     html += '<div class="student-detail-header">';
     html += '<div class="student-detail-id">';
-    html += avatarAluno(aluno);
+    html += avatarAluno(aluno, "width:34px;height:34px;font-size:13px;border-radius:10px;");
     html += '<div><div class="card-title" style="font-size:16px;">'+esc(aluno.nome)+' '+(aluno.ativo ? '<span class="badge ok">Ativo</span>' : '<span class="badge neutral">Inativo</span>')+'</div>';
     html += '<div class="card-sub">'+[idadeLabel(aluno.nascimento), aluno.sexo].filter(Boolean).join(" · ")+'</div></div>';
     html += '</div>';
     html += '<button class="btn sm" onclick="abrirModalAluno(\''+aluno.id+'\')">'+ICONS.edit+' Editar</button>';
     html += '</div>';
-    html += '<div class="action-row" style="margin-top:6px;">';
+    html += '<div class="action-row aluno-header-acoes">';
     html += '<button class="btn sm ghost" onclick="confirmarAlternarAtivoAluno(\''+aluno.id+'\')">'+(aluno.ativo ? 'Inativar aluno' : 'Reativar aluno')+'</button>';
     html += '<button class="btn sm ghost" onclick="confirmarExcluirAluno(\''+aluno.id+'\')">Excluir aluno</button>';
-    html += '</div>';
-
-    html += '<div class="action-row" style="margin-top:6px;">';
     if (aluno.authUserId){
       html += '<span class="badge ok">'+ICONS.check+' Convidado para o portal</span>';
       html += '<button class="btn sm ghost" onclick="convidarAluno(\''+aluno.id+'\')" id="btn-convidar-'+aluno.id+'">Reenviar convite</button>';
@@ -2568,66 +2958,71 @@ import './styles.css';
     }
     html += '</div>';
 
-    html += '<div class="stat-row">';
-    html += '<div class="stat-card"><div class="stat-value sm">'+aulasConcluidas+'</div><div class="stat-label">Aulas concluídas</div></div>';
-    html += '<div class="stat-card ok"><div class="stat-value sm">'+fmtMoeda(totalPago)+'</div><div class="stat-label">Total pago</div></div>';
-    html += '<div class="stat-card warn"><div class="stat-value sm">'+fmtMoeda(totalAberto)+'</div><div class="stat-label">Em aberto</div></div>';
-    html += '</div>';
+    // Abas do detalhe do aluno: Visão geral / Avaliações físicas / Aulas / Financeiro.
+    var ABAS_ALUNO = [
+      { id:"geral", label:"Visão geral", ic:ICONS.user },
+      { id:"avaliacoes", label:"Avaliações físicas", ic:ICONS.chart },
+      { id:"aulas", label:"Aulas", ic:ICONS.calendar },
+      { id:"financeiro", label:"Financeiro", ic:ICONS.cash }
+    ];
+    html += '<div class="aluno-abas">' + ABAS_ALUNO.map(function(a){
+      return '<button class="aluno-aba'+(detalheAlunoAba===a.id?' active':'')+'" onclick="setDetalheAlunoAba(\''+aluno.id+'\',\''+a.id+'\')">'+a.ic+'<span>'+a.label+'</span></button>';
+    }).join('') + '</div>';
 
-    html += '<div class="card" style="margin-top:8px;">';
-    html += '<div class="card-row"><span class="card-sub">Telefone</span><span>'+aluno.telefone+'</span></div>';
-    html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Endereço</span><span style="text-align:right;max-width:60%;">'+esc(aluno.endereco)+'</span></div>';
-    var diasFixos = aluno.recorrencia && aluno.recorrencia.horarios ? Object.keys(aluno.recorrencia.horarios).length : 0;
-    var freqTexto = diasFixos > 0 ? diasFixos+"x/semana" : "sem dia fixo";
-    html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Plano</span><span class="badge accent">'+planoLabel+' · '+freqTexto+'</span></div>';
-    html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Cobrança</span><span>'+valorPlano+' ('+cobrancaLabel+')</span></div>';
-    var recLabel = recorrenciaLabel(aluno.recorrencia);
-    if (recLabel){
-      html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Recorrência</span><span>'+recLabel+'</span></div>';
-    }
-    html += '<div class="action-row">';
-    html += '<a class="btn sm" href="'+mapsLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Maps</a>';
-    html += '<a class="btn sm" href="'+wazeLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Waze</a>';
-    if (recLabel){
-      html += '<button class="btn sm" onclick="gerarAulasRecorrentes(\''+aluno.id+'\')">Gerar aulas (8 semanas)</button>';
-    }
-    html += '</div></div>';
+    if (detalheAlunoAba === "geral"){
+      html += '<div class="stat-row">';
+      html += '<div class="stat-card"><div class="stat-value sm">'+aulasConcluidas+'</div><div class="stat-label">Aulas concluídas</div></div>';
+      html += '<div class="stat-card ok"><div class="stat-value sm">'+fmtMoeda(totalPago)+'</div><div class="stat-label">Total pago</div></div>';
+      html += '<div class="stat-card warn"><div class="stat-value sm">'+fmtMoeda(totalAberto)+'</div><div class="stat-label">Em aberto</div></div>';
+      html += '</div>';
 
-    html += '<div class="section-title">Histórico de aulas</div>';
-    if (aulasDoAluno.length===0){
-      html += '<div class="empty-state"><div class="display">Nenhuma aula ainda</div>Agende a primeira aula na aba Agenda.</div>';
-    } else {
-      aulasDoAluno.forEach(function(c){
-        html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtDataBR(c.data)+' · '+c.hora+'</div>'+
-          (c.status==="concluida" ? '<div class="card-sub">'+(c.faturada ? "já cobrada" : "ainda não cobrada")+'</div>' : '')+
-          '</div>'+statusBadge(c.status)+'</div></div>';
-      });
-    }
-
-    html += '<div class="section-title">Histórico financeiro</div>';
-    if (pagamentosDoAluno.length===0){
-      html += '<div class="empty-state"><div class="display">Sem lançamentos</div></div>';
-    } else {
-      pagamentosDoAluno.forEach(function(p){
-        html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtMoeda(p.valor)+'</div><div class="card-sub">'+esc(p.referencia)+'</div></div>';
-        html += p.status==="pago" ? '<span class="badge ok">'+ICONS.check+' pago</span>' : (ehVencido(p) ? '<span class="badge danger">vencido</span>' : '<span class="badge warn">pendente</span>');
-        html += '</div>';
-        html += '<div class="action-row"><button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' '+(p.status==="pago"?"Ver recibo":"Ver cobrança")+'</button></div>';
-        html += '</div>';
-      });
-    }
-
-    html += '<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">Avaliação física';
-    html += '<button class="btn sm" onclick="abrirModalAvaliacao(\''+aluno.id+'\')">'+ICONS.edit+' Nova avaliação</button></div>';
-    var avaliacoesDoAlunoAtivas = avaliacoesDoAluno(id, true);
-    if (avaliacoesDoAlunoAtivas.length === 0){
-      html += '<div class="empty-state"><div class="display">Nenhuma avaliação ainda</div>Registre a primeira avaliação física deste aluno.</div>';
-    } else {
-      avaliacoesDoAlunoAtivas.forEach(function(av){ html += renderCardAvaliacao(av); });
+      html += '<div class="card" style="margin-top:8px;">';
+      html += '<div class="card-row"><span class="card-sub">Telefone</span><span>'+aluno.telefone+'</span></div>';
+      html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Endereço</span><span style="text-align:right;max-width:60%;">'+esc(aluno.endereco)+'</span></div>';
+      var diasFixos = aluno.recorrencia && aluno.recorrencia.horarios ? Object.keys(aluno.recorrencia.horarios).length : 0;
+      var freqTexto = diasFixos > 0 ? diasFixos+"x/semana" : "sem dia fixo";
+      html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Plano</span><span class="badge accent">'+planoLabel+' · '+freqTexto+'</span></div>';
+      html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Cobrança</span><span>'+valorPlano+' ('+cobrancaLabel+')</span></div>';
+      var recLabel = recorrenciaLabel(aluno.recorrencia);
+      if (recLabel){
+        html += '<div class="card-row" style="margin-top:6px;"><span class="card-sub">Recorrência</span><span>'+recLabel+'</span></div>';
+      }
+      html += '<div class="action-row">';
+      html += '<a class="btn sm" href="'+mapsLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Maps</a>';
+      html += '<a class="btn sm" href="'+wazeLink(aluno.endereco)+'" target="_blank" rel="noopener">'+ICONS.route+' Waze</a>';
+      if (recLabel){
+        html += '<button class="btn sm" onclick="gerarAulasRecorrentes(\''+aluno.id+'\')">Gerar aulas (8 semanas)</button>';
+      }
+      html += '</div></div>';
+    } else if (detalheAlunoAba === "avaliacoes"){
+      html += screenAvaliacoesFisicasTab(aluno);
+    } else if (detalheAlunoAba === "aulas"){
+      if (aulasDoAluno.length===0){
+        html += '<div class="empty-state"><div class="display">Nenhuma aula ainda</div>Agende a primeira aula na aba Agenda.</div>';
+      } else {
+        aulasDoAluno.forEach(function(c){
+          html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtDataBR(c.data)+' · '+c.hora+'</div>'+
+            (c.status==="concluida" ? '<div class="card-sub">'+(c.faturada ? "já cobrada" : "ainda não cobrada")+'</div>' : '')+
+            '</div>'+statusBadge(c.status)+'</div></div>';
+        });
+      }
+    } else if (detalheAlunoAba === "financeiro"){
+      if (pagamentosDoAluno.length===0){
+        html += '<div class="empty-state"><div class="display">Sem lançamentos</div></div>';
+      } else {
+        pagamentosDoAluno.forEach(function(p){
+          html += '<div class="card"><div class="card-row"><div class="card-main"><div class="card-title">'+fmtMoeda(p.valor)+'</div><div class="card-sub">'+esc(p.referencia)+'</div></div>';
+          html += p.status==="pago" ? '<span class="badge ok">'+ICONS.check+' pago</span>' : (ehVencido(p) ? '<span class="badge danger">vencido</span>' : '<span class="badge warn">pendente</span>');
+          html += '</div>';
+          html += '<div class="action-row"><button class="btn sm" onclick="abrirRecibo(\''+p.id+'\')">'+ICONS.recibo+' '+(p.status==="pago"?"Ver recibo":"Ver cobrança")+'</button></div>';
+          html += '</div>';
+        });
+      }
     }
 
     el.innerHTML = html;
   };
+  window.setDetalheAlunoAba = function(alunoId, aba){ detalheAlunoAba = aba; abrirDetalheAluno(alunoId); };
   window.voltarListaAlunos = function(){
     document.getElementById("alunos-lista-view").hidden = false;
     document.getElementById("alunos-detalhe-view").hidden = true;

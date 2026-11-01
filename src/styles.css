@@ -154,14 +154,72 @@
   .card-main { min-width: 0; }
   .card.ghost { opacity: 0.55; }
 
-  .aval-itens-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px,1fr));
-    gap: 4px 10px;
-    margin-top: 6px;
-  }
-  .aval-item { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; }
   .aval-extra-linha { align-items: center; }
+
+  /* ---- Abas do detalhe do aluno (Visão geral / Avaliações físicas / Aulas / Financeiro) ---- */
+  .aluno-abas { display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border); margin:10px 0 14px; }
+  .aluno-aba {
+    display:flex; align-items:center; gap:7px; background:none; border:1px solid transparent;
+    border-radius:999px; padding:9px 15px; margin-bottom:8px; font-size:13px; font-weight:700;
+    color: var(--fg-muted);
+  }
+  .aluno-aba svg { width:17px; height:17px; flex:none; }
+  .aluno-aba:hover { color: var(--fg); background: var(--surface-alt); }
+  .aluno-aba.active { color: var(--accent); background: var(--accent-soft); }
+
+  /* ---- Avaliação física: indicadores, evolução e cards expansíveis ---- */
+  .stat-card.with-ic { display:flex; align-items:center; gap:10px; text-align:left; }
+  .stat-ic-badge {
+    width:34px; height:34px; border-radius:10px; flex:none; padding:8px;
+    background: var(--accent-soft); color: var(--accent);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stat-ic-badge svg { width:100%; height:100%; }
+  .aval-card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .aval-exp-card { padding:14px; }
+  .aval-exp-clicavel { display:flex; align-items:center; gap:10px; flex:1; min-width:0; cursor:pointer; }
+  .aval-exp-info { min-width:0; }
+  .aval-hist-ic {
+    width:32px; height:32px; flex:none; border-radius:9px; padding:7px;
+    background: var(--accent-soft); color: var(--accent);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .aval-hist-ic svg { width:100%; height:100%; }
+  .aval-hist-chev { width:16px; height:16px; color: var(--fg-muted); flex:none; transition: transform .15s ease; }
+  .aval-hist-chev.aberto { transform: rotate(180deg); color: var(--accent); }
+  .aval-exp-cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:12px; }
+  .aval-exp-col-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color: var(--fg-muted); margin-bottom:6px; }
+  .aval-exp-col-todas { max-height:220px; overflow-y:auto; }
+  .aval-exp-row { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .aval-exp-row:last-child { border-bottom:none; }
+  .aval-row-label { display:flex; align-items:center; gap:7px; min-width:0; }
+  .aval-row-ic { width:16px; height:16px; flex:none; color: var(--accent); }
+  .aval-row-ic svg { width:100%; height:100%; display:block; }
+  .aval-chart circle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .aval-exp-row .nome { color: var(--fg-muted); }
+  .aval-exp-row .valor { font-weight:700; white-space:nowrap; }
+  .aval-exp-row .delta { font-size:11px; color: var(--accent); font-weight:600; margin-left:4px; white-space:nowrap; }
+  .aval-exp-row .delta.neutro { color: var(--fg-muted); font-weight:500; }
+  .aval-exp-obs { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+
+  /* indicadores da aba Avaliações físicas: grid própria (não mexe no
+     .stat-row usado em outras telas do app) — 3 colunas só cabem bem a
+     partir de ~760px; abaixo disso os textos (datas, "Última avaliação")
+     ficam espremidos. */
+  @media (max-width: 760px){
+    .aval-indicadores { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px){
+    .aval-indicadores { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 620px){
+    .aluno-abas { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .aluno-aba { white-space:nowrap; padding:8px 12px; font-size:12.5px; }
+    .aval-exp-cols { grid-template-columns:1fr; gap:4px; }
+    .aval-exp-col-todas { max-height:none; overflow-y:visible; }
+    .aval-exp-clicavel { gap:8px; }
+  }
   .card-title { font-weight: 700; font-size: 14px; }
   .card-sub { font-size: 12px; color: var(--fg-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -324,6 +382,7 @@
   .recibo-status-pill svg { width: 11px; height: 11px; }
   .recibo-status-pill.pago { background: #e4f6ec; color: #1f8a4c; }
   .recibo-status-pill.aberto { background: #fdf0da; color: #a6690a; }
+  .recibo-status-pill.info { background: #D7F6F3; color: #0C6B63; }
   .recibo-tagline { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #9a9ca3; margin-top: 2px; }
   .recibo-titulo { text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #5c5f68; margin: 18px 0 18px; padding-bottom: 16px; border-bottom: 2px solid #17181c; }
 
@@ -411,8 +470,9 @@
   }
   .disp-dia-inicio:disabled, .disp-dia-fim:disabled { opacity: .45; }
 
-  .student-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .student-detail-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .student-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
+  .student-detail-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .aluno-header-acoes { margin-top: 4px; gap: 5px; }
   .avatar {
     width: 40px; height: 40px; border-radius: 12px;
     background: var(--accent-soft); color: var(--accent);
@@ -420,7 +480,7 @@
     font-family: var(--font-display); font-weight: 800; font-size: 15px;
     flex: none;
   }
-  .back-btn { background: none; border: none; color: var(--fg-muted); padding: 4px 0 10px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .back-btn { background: none; border: none; color: var(--fg-muted); padding: 2px 0 6px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; cursor: pointer; }
   .back-btn svg { width: 14px; height: 14px; }
 
   .day-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; position: relative; }
