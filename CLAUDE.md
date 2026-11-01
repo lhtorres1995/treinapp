@@ -19,6 +19,7 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 - Alunos: CRUD, planos (mensal/semanal/avulsa), cobrança (fixa/por aula), recorrência de horários, foto.
 - Agenda: criação/edição de aulas, detecção de conflito, disponibilidade e bloqueios do personal, remarcação (RPC `remarcar_aula`), check-in por QR (RPC `checkin_por_token`).
 - Financeiro: cobrança por período, controle de status de pagamento, recibo em PDF (`html2pdf.js`).
+- Avaliação física: catálogo de métricas (peso/altura, perímetros padrão + personalizados, bioimpedância/outras personalizadas), lançamento por aluno (dentro ou fora de aula), histórico com cards expansíveis, gráfico de evolução com seletor de métrica, edição/exclusão (soft delete) e relatório em PDF (mesmo mecanismo `html2pdf.js` do recibo, sem dado financeiro). Detalhe do aluno organizado em abas (Visão geral/Avaliações físicas/Aulas/Financeiro).
 - Push notification: envio via edge function `enviar-push` (requer secrets VAPID não presentes no repo).
 
 ## Comandos de desenvolvimento
@@ -38,4 +39,5 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 - **Financeiro/recibos**: lógica de cobrança e geração de PDF está em `main.js`; não há testes automatizados — validar manualmente qualquer alteração em cálculo de valores/períodos.
 - **Remarcação via solicitação do aluno**: quando o aluno pede remarcação, o fluxo passa pela tabela `solicitacoes` (não `solicitacoes_aluno` — essa está órfã, ver `../CLAUDE.md`) e termina sendo aplicado aqui via RPC `responder_contraproposta` (chamada pelo aluno, mas que cria a nova `aula` deste lado).
 - Migrações `0004`/`0005` no repo têm comentários dizendo "não aplicadas em produção" — **isso está desatualizado**: as tabelas/colunas dessas migrações já existem e estão ativas no banco real (confirmado via inspeção direta, 2026-11).
+- **Avaliação física**: migração `0007_avaliacoes_fisicas.sql` aplicada em produção em 2026-11-01 (ver `../docs/ARQUITETURA-BANCO.md`). Métrica de catálogo é imutável após criada (nome/unidade/dono) — corrigir de verdade significa criar uma métrica nova. Métrica de perímetro personalizada entra automaticamente no grupo fixo "Perímetros" do formulário (mesmo tratamento das métricas padrão).
 - Não alterar `supabase/schema.sql`/migrações sem antes confirmar o estado real do banco — o repositório não é a fonte de verdade do schema.
