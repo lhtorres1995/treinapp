@@ -77,38 +77,67 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Sessão inválida." }, 401);
   }
 
+  const callerId = userData.user.id;
+
+  // Posse EXPLÍCITA, não só a visibilidade do SELECT: a tabela `alunos` tem
+  // uma policy que deixa o próprio aluno ver seu cadastro (auth.uid() =
+  // auth_user_id). Sem o filtro professor_id abaixo, um ALUNO logado poderia
+  // chamar esta função com o próprio id, passar nesse SELECT e disparar um
+  // delete (service role) de registros que são do PERSONAL. Exigir
+  // professor_id = quem chamou garante que só o personal dono exclui.
   const { data: aluno, error: alunoErr } = await comoPersonal
     .from("alunos")
-    .select("id, nome, auth_user_id")
+    .select("id, nome, auth_user_id, professor_id")
     .eq("id", alunoId)
+    .eq("professor_id", callerId)
     .maybeSingle();
 
   if (alunoErr) {
     return jsonResponse({ error: "Erro ao buscar o aluno." }, 500);
   }
   if (!aluno) {
-    // RLS fez o filtro: ou o id não existe, ou não é um aluno desse personal.
     return jsonResponse({ error: "Aluno não encontrado." }, 404);
   }
 
   // Daqui pra frente, service role — nunca chega ao navegador.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // 1) Apaga a linha do aluno. As FKs ON DELETE CASCADE no banco derrubam, na
-  //    mesma transação, aulas, pagamentos, avaliações físicas (+ itens +
-  //    histórico), push_subscriptions e solicitações desse aluno.
-  const { error: delErr } = await admin.from("alunos").delete().eq("id", aluno.id);
+  // Decide se PODE remover o login — ANTES de apagar qualquer coisa. Nunca
+  // confiar cegamente em alunos.auth_user_id: essa coluna é gravável pelo
+  // personal (a policy ALL só checa professor_id), então um personal poderia
+  // apontá-la para o uid de QUALQUER usuário (outro personal, etc.) e usar
+  // esta função pra apagar a conta dele. Só removemos o login se o auth user
+  // de fato for o aluno deste cadastro — o que o fluxo de convite
+  // (convidar-aluno) grava no user_metadata, server-side: role='aluno' e
+  // aluno_id = id deste aluno. Se não bater, apagamos o cadastro/histórico
+  // (que são mesmo deste personal), mas NÃO tocamos no auth user.
+  let podeRemoverLogin = false;
+  if (aluno.auth_user_id) {
+    const { data: alvo, error: getErr } = await admin.auth.admin.getUserById(aluno.auth_user_id);
+    if (!getErr && alvo?.user) {
+      const meta = (alvo.user.user_metadata || {}) as Record<string, unknown>;
+      podeRemoverLogin = meta.role === "aluno" && meta.aluno_id === aluno.id;
+    }
+  }
+
+  // 1) Apaga a linha do aluno (com o mesmo filtro de posse). As FKs ON DELETE
+  //    CASCADE no banco derrubam, na mesma transação, aulas, pagamentos,
+  //    avaliações físicas (+ itens + histórico), push_subscriptions e
+  //    solicitações desse aluno.
+  const { error: delErr } = await admin
+    .from("alunos")
+    .delete()
+    .eq("id", aluno.id)
+    .eq("professor_id", callerId);
   if (delErr) {
     return jsonResponse({ error: "Não foi possível excluir o aluno: " + delErr.message }, 500);
   }
 
-  // 2) Remove o login/acesso ao portal, se existia. Já sem a linha de `alunos`
-  //    referenciando este usuário, a remoção fica livre. Se falhar aqui, o
-  //    cadastro e o histórico já foram apagados: reportamos claramente em vez
-  //    de fingir sucesso total (caso raro; o acesso pode ser removido depois
-  //    pelo painel).
-  if (aluno.auth_user_id) {
-    const { error: authErr } = await admin.auth.admin.deleteUser(aluno.auth_user_id);
+  // 2) Remove o login/acesso ao portal, se verificado acima. Já sem a linha de
+  //    `alunos` referenciando este usuário, a remoção fica livre. Se falhar
+  //    aqui, o cadastro e o histórico já foram apagados: reportamos.
+  if (podeRemoverLogin) {
+    const { error: authErr } = await admin.auth.admin.deleteUser(aluno.auth_user_id!);
     if (authErr) {
       return jsonResponse({
         ok: true,
@@ -118,7 +147,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true, loginRemovido: !!aluno.auth_user_id });
+  return jsonResponse({ ok: true, loginRemovido: podeRemoverLogin });
 });
 
 function jsonResponse(body: unknown, status = 200) {
