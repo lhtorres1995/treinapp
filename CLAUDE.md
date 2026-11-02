@@ -10,13 +10,13 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 - `src/styles.css` — estilos.
 - `public/` — PWA: `manifest.webmanifest`, `sw.js` (service worker network-first, não cacheia respostas do Supabase).
 - `supabase/schema.sql` + `supabase/migrations/` — schema **versionado**, mas **incompleto frente ao banco real** (ver `../docs/ARQUITETURA-BANCO.md`): várias tabelas/RPCs em produção não têm `.sql` correspondente aqui.
-- `supabase/functions/enviar-push/` — edge function (Deno), deploy manual, não automatizado.
+- `supabase/functions/` — edge functions (Deno), deploy manual, não automatizado. `enviar-push/` está versionada; `excluir-aluno/` também (ver abaixo). `convidar-aluno` e `push-agendados` existem e rodam em produção, mas **não têm fonte neste repo** — mesmo padrão de "banco real incompleto" já descrito acima, só que para edge functions.
 - `.github/workflows/backup-supabase.yml` — backup diário (`pg_dump`) via GitHub Actions.
 
 ## Funcionalidades implementadas
 
 - Auth: login, cadastro, recuperação de senha.
-- Alunos: CRUD, planos (mensal/semanal/avulsa), cobrança (fixa/por aula), recorrência de horários, foto.
+- Alunos: CRUD, planos (mensal/semanal/avulsa), cobrança (fixa/por aula), recorrência de horários, foto. Exclusão definitiva (mesmo com histórico) via edge function `excluir-aluno` — ver "Cuidados específicos".
 - Agenda: criação/edição de aulas, detecção de conflito, disponibilidade e bloqueios do personal, remarcação (RPC `remarcar_aula`), check-in por QR (RPC `checkin_por_token`).
 - Financeiro: cobrança por período, controle de status de pagamento, recibo em PDF (`html2pdf.js`).
 - Avaliação física: catálogo de métricas (peso/altura, perímetros padrão + personalizados, bioimpedância/outras personalizadas), lançamento por aluno (dentro ou fora de aula), histórico com cards expansíveis, gráfico de evolução com seletor de métrica, edição/exclusão (soft delete) e relatório em PDF (mesmo mecanismo `html2pdf.js` do recibo, sem dado financeiro). Detalhe do aluno organizado em abas (Visão geral/Avaliações físicas/Aulas/Financeiro).
@@ -40,4 +40,10 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 - **Remarcação via solicitação do aluno**: quando o aluno pede remarcação, o fluxo passa pela tabela `solicitacoes` (não `solicitacoes_aluno` — essa está órfã, ver `../CLAUDE.md`) e termina sendo aplicado aqui via RPC `responder_contraproposta` (chamada pelo aluno, mas que cria a nova `aula` deste lado).
 - Migrações `0004`/`0005` no repo têm comentários dizendo "não aplicadas em produção" — **isso está desatualizado**: as tabelas/colunas dessas migrações já existem e estão ativas no banco real (confirmado via inspeção direta, 2026-11).
 - **Avaliação física**: migração `0007_avaliacoes_fisicas.sql` aplicada em produção em 2026-11-01 (ver `../docs/ARQUITETURA-BANCO.md`). Métrica de catálogo é imutável após criada (nome/unidade/dono) — corrigir de verdade significa criar uma métrica nova. Métrica de perímetro personalizada entra automaticamente no grupo fixo "Perímetros" do formulário (mesmo tratamento das métricas padrão).
+- **Trigger de histórico de item de avaliação** (`registrar_historico_item_avaliacao_fisica`): migração `0008_fix_historico_item_delete.sql` (aplicada em produção em 2026-11-02) corrigiu o ramo `DELETE` para só gravar histórico se a avaliação-pai ainda existir — sem essa checagem, apagar uma avaliação (ou um aluno, por cascata) violava a FK `avaliacoes_fisicas_historico_avaliacao_id_fkey`. Qualquer novo trigger `AFTER DELETE` que grave em tabela com FK para algo apagado na mesma cascata precisa do mesmo cuidado.
+- **Exclusão de aluno** (`window.excluirAluno`, botão "Excluir aluno" no detalhe do aluno): chama a edge function `excluir-aluno` (`supabase/functions/excluir-aluno/index.ts`), que apaga o cadastro e **todo o histórico por `ON DELETE CASCADE`** (aulas, pagamentos, avaliações físicas + itens + histórico, push_subscriptions, solicitações — todas as FKs para `alunos.id` já são `CASCADE` no banco) e remove o login (`auth.users`), se houver. Pontos importantes para qualquer alteração nessa function:
+  - O delete do aluno roda com o **JWT do personal** (não a service role) de propósito — rodar com service role faz `auth.uid()` ficar `null` dentro dos triggers de auditoria que disparam na cascata, violando o NOT NULL de `alterado_por`.
+  - A tabela `alunos` tem uma policy de SELECT que deixa o próprio **aluno** ver seu cadastro (`auth.uid() = auth_user_id`); por isso a function exige `professor_id = uid do chamador` explicitamente, em vez de confiar só na visibilidade do SELECT.
+  - A coluna `alunos.auth_user_id` é **gravável pelo personal** (a policy `ALL` só checa `professor_id`) — a function não confia nela cegamente para decidir qual `auth.users` apagar; confirma antes, via `user_metadata` (gravado pelo fluxo de convite), que o auth user é mesmo este aluno.
+  - **Follow-up pendente (exige migração/autorização)**: tornar `alunos.auth_user_id` não gravável por clients (revogar `UPDATE` da coluna ou trigger `BEFORE UPDATE`), fechando essa brecha também na origem — hoje só é mitigada na function.
 - Não alterar `supabase/schema.sql`/migrações sem antes confirmar o estado real do banco — o repositório não é a fonte de verdade do schema.
