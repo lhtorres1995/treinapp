@@ -88,9 +88,9 @@ Deno.serve(async (req) => {
   // Posse EXPLÍCITA, não só a visibilidade do SELECT: a tabela `alunos` tem
   // uma policy que deixa o próprio aluno ver seu cadastro (auth.uid() =
   // auth_user_id). Sem o filtro professor_id abaixo, um ALUNO logado poderia
-  // chamar esta função com o próprio id, passar nesse SELECT e disparar um
-  // delete (service role) de registros que são do PERSONAL. Exigir
-  // professor_id = quem chamou garante que só o personal dono exclui.
+  // chamar esta função com o próprio id e passar nesse SELECT. Exigir
+  // professor_id = quem chamou garante que só o personal dono exclui (a RLS
+  // de DELETE já bloquearia o aluno, mas deixamos explícito).
   const { data: aluno, error: alunoErr } = await comoPersonal
     .from("alunos")
     .select("id, nome, auth_user_id, professor_id")
