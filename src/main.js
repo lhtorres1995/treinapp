@@ -742,6 +742,25 @@ import './styles.css';
     });
   };
 
+  // Recarrega os dados do servidor sem fechar/reabrir o app (botão no header,
+  // visível no mobile). Só leitura: atualiza o estado e re-renderiza.
+  window.atualizarDados = async function(){
+    if (!usuarioId) return;
+    var btn = document.querySelector(".header-refresh");
+    if (btn && btn.classList.contains("spinning")) return;
+    if (btn) btn.classList.add("spinning");
+    try {
+      await carregarDadosDoServidor();
+      renderAll();
+      mostrarToast("Dados atualizados.");
+    } catch(err){
+      console.error(err);
+      mostrarToast("Não foi possível atualizar agora. Verifique sua conexão.");
+    } finally {
+      if (btn) btn.classList.remove("spinning");
+    }
+  };
+
   // Rede de segurança: dá uma janela curta para o próprio onAuthStateChange
   // (INITIAL_SESSION ou PASSWORD_RECOVERY, registrado acima) ser a fonte
   // única de verdade sobre o que mostrar. Só chama getSession() por conta
@@ -3063,33 +3082,49 @@ import './styles.css';
   window.confirmarExcluirAluno = function(id){
     var aluno = getAluno(id);
     if (!aluno) return;
-    var temAulas = state.aulas.some(function(c){ return c.alunoId===id; });
-    var temPagamentos = state.pagamentos.some(function(p){ return p.alunoId===id; });
-    if (temAulas || temPagamentos){
-      pedirConfirmacao(
-        "Excluir aluno",
-        "Não é possível excluir "+aluno.nome+": ele já tem aulas e/ou cobranças lançadas no histórico, e excluir apagaria esse histórico. Em vez disso, use \"Inativar aluno\" — o cadastro some das listas ativas, mas o histórico fica preservado. Deseja inativar agora?",
-        "Inativar",
-        function(){ if (aluno.ativo) alternarAtivoAluno(id); else mostrarToast("Esse aluno já está inativo."); }
-      );
-      return;
-    }
     pedirConfirmacao(
       "Excluir aluno",
-      "Isso apaga o cadastro de "+aluno.nome+" permanentemente. Ele não tem nenhuma aula ou cobrança lançada, então não há histórico a perder. Tem certeza?",
-      "Excluir",
+      "Isso apaga PERMANENTEMENTE o cadastro de "+aluno.nome+" e TODO o histórico dele: aulas, cobranças, avaliações físicas e o acesso/login ao portal do aluno. Essa ação não pode ser desfeita. Se o aluno só foi cadastrado errado, considere \"Inativar aluno\", que preserva o histórico. Tem certeza que quer excluir tudo?",
+      "Excluir tudo",
       function(){ excluirAluno(id); }
     );
   };
 
-  window.excluirAluno = function(id){
-    var antes = state.alunos.length;
-    state.alunos = state.alunos.filter(function(a){ return a.id !== id; });
-    if (state.alunos.length === antes) return;
-    salvarEstado();
-    voltarListaAlunos();
-    renderAll();
-    mostrarToast("Aluno excluído.");
+  // Exclusão definitiva: vai pela Edge Function excluir-aluno, que valida posse
+  // (RLS, com o JWT deste personal) e, com a service role, apaga a linha do
+  // aluno — o CASCADE no banco derruba todo o histórico — e remove o login
+  // (auth.users). A service role nunca passa pelo navegador.
+  window.excluirAluno = async function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    mostrarToast("Excluindo aluno...");
+    try {
+      var sessao = await sb.auth.getSession();
+      var token = sessao.data.session && sessao.data.session.access_token;
+      if (!token) throw new Error("sem sessão");
+      var r = await sb.functions.invoke("excluir-aluno", {
+        body: { alunoId: id },
+        headers: { Authorization: "Bearer " + token }
+      });
+      if (r.error) throw r.error;
+      if (r.data && r.data.error) throw new Error(r.data.error);
+      // Recarrega do servidor (fonte da verdade) em vez de mexer no estado
+      // local: o CASCADE apagou linhas de várias tabelas de uma vez.
+      await carregarDadosDoServidor();
+      voltarListaAlunos();
+      renderAll();
+      mostrarToast((r.data && r.data.aviso) ? r.data.aviso : "Aluno e todo o histórico excluídos.");
+    } catch(err){
+      console.error(err);
+      var msg = (err && err.message) || "Erro ao excluir o aluno.";
+      try {
+        if (err && err.context && typeof err.context.json === "function") {
+          var corpo = await err.context.json();
+          if (corpo && corpo.error) msg = corpo.error;
+        }
+      } catch(e){}
+      mostrarToast(msg);
+    }
   };
 
   // Chama a Edge Function convidar-aluno (ver supabase/functions/convidar-aluno).
@@ -3219,27 +3254,37 @@ import './styles.css';
       '<div><div class="pend-t pag-inf-t">'+infs.length+' pagamento'+(infs.length>1?'s':'')+' aguardando confirmação</div>'+
       '<div class="pend-s">O aluno informou que pagou. Confira no seu banco e confirme a baixa.</div></div></div>'+itens+'</div>';
   }
+  // Próximo atendimento de verdade: a primeira aula não concluída/cancelada/
+  // remarcada a partir de agora, podendo ser hoje (ainda não concluída,
+  // mesmo que o horário já tenha passado) ou em qualquer dia futuro.
+  function proximoAtendimentoGlobal(){
+    var hojeStr = fmtData(hoje);
+    return state.aulas.filter(function(c){
+      if (c.status==="cancelada" || c.status==="remarcada") return false;
+      if (c.data>hojeStr) return true;
+      return c.data===hojeStr && c.status!=="concluida";
+    }).sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? -1 : 1; })[0] || null;
+  }
+
   function renderResumo(){
     renderShell();
     renderPagamentosInformados();
     renderPendentesConclusao();
     var hojeStr = fmtData(hoje);
-    var aulasHoje = state.aulas.filter(function(c){return c.data===hojeStr;})
-      .sort(function(a,b){ return a.hora < b.hora ? -1 : 1; });
 
     // hero
     var heroBox = document.getElementById("resumo-hero");
-    var ativasHoje = aulasHoje.filter(function(c){ return c.status!=="cancelada" && c.status!=="remarcada"; });
-    if (ativasHoje.length===0){
-      heroBox.innerHTML = '<div class="dash-hero vazio"><div class="dash-hero-label">Hoje</div>'
-        + '<div class="dash-hero-aluno">Nenhuma aula hoje</div>'
+    var alvo = proximoAtendimentoGlobal();
+    if (!alvo){
+      heroBox.innerHTML = '<div class="dash-hero vazio"><div class="dash-hero-label">Próximo atendimento</div>'
+        + '<div class="dash-hero-aluno">Nenhuma aula agendada</div>'
         + '<div class="dash-hero-end">Aproveite para planejar a semana.</div></div>';
     } else {
-      var alvo = ativasHoje.filter(function(c){return c.status!=="concluida";})[0] || ativasHoje[0];
       var al = getAluno(alvo.alunoId);
+      var quando = (alvo.data===hojeStr ? "Hoje" : fmtDataBR(alvo.data)) + " · " + alvo.hora;
       heroBox.innerHTML = '<div class="dash-hero">'
         + '<div class="dash-hero-top"><div><div class="dash-hero-label">Seu próximo atendimento</div>'
-        +   '<div class="dash-hero-time">'+alvo.hora+'</div></div>'
+        +   '<div class="dash-hero-time">'+quando+'</div></div>'
         +   '<span class="dash-hero-badge">'+heroStatusLabel(alvo.status)+'</span></div>'
         + '<div class="dash-hero-aluno">'+esc(al.nome)+'</div>'
         + '<div class="dash-hero-end">'+al.endereco+'</div>'
@@ -3457,13 +3502,6 @@ import './styles.css';
         + '<div class="atv-main"><div class="atv-t">'+it.t+'</div><div class="atv-s">'+it.s+'</div></div></div>';
     }).join("") : '<div class="empty-state sm">Sem atividades recentes.</div>';
   }
-
-  window.buscaHeader = function(valor){
-    if (!document.getElementById("screen-alunos").classList.contains("active")) irParaTab("alunos");
-    var inp = document.getElementById("busca-alunos");
-    if (inp) inp.value = valor;
-    filtrarAlunos(valor);
-  };
 
   function cardAula(c, aluno, mostrarData){
     var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + esc(aluno.nome);
