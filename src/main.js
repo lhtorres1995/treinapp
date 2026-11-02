@@ -3219,27 +3219,37 @@ import './styles.css';
       '<div><div class="pend-t pag-inf-t">'+infs.length+' pagamento'+(infs.length>1?'s':'')+' aguardando confirmação</div>'+
       '<div class="pend-s">O aluno informou que pagou. Confira no seu banco e confirme a baixa.</div></div></div>'+itens+'</div>';
   }
+  // Próximo atendimento de verdade: a primeira aula não concluída/cancelada/
+  // remarcada a partir de agora, podendo ser hoje (ainda não concluída,
+  // mesmo que o horário já tenha passado) ou em qualquer dia futuro.
+  function proximoAtendimentoGlobal(){
+    var hojeStr = fmtData(hoje);
+    return state.aulas.filter(function(c){
+      if (c.status==="cancelada" || c.status==="remarcada") return false;
+      if (c.data>hojeStr) return true;
+      return c.data===hojeStr && c.status!=="concluida";
+    }).sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? -1 : 1; })[0] || null;
+  }
+
   function renderResumo(){
     renderShell();
     renderPagamentosInformados();
     renderPendentesConclusao();
     var hojeStr = fmtData(hoje);
-    var aulasHoje = state.aulas.filter(function(c){return c.data===hojeStr;})
-      .sort(function(a,b){ return a.hora < b.hora ? -1 : 1; });
 
     // hero
     var heroBox = document.getElementById("resumo-hero");
-    var ativasHoje = aulasHoje.filter(function(c){ return c.status!=="cancelada" && c.status!=="remarcada"; });
-    if (ativasHoje.length===0){
-      heroBox.innerHTML = '<div class="dash-hero vazio"><div class="dash-hero-label">Hoje</div>'
-        + '<div class="dash-hero-aluno">Nenhuma aula hoje</div>'
+    var alvo = proximoAtendimentoGlobal();
+    if (!alvo){
+      heroBox.innerHTML = '<div class="dash-hero vazio"><div class="dash-hero-label">Próximo atendimento</div>'
+        + '<div class="dash-hero-aluno">Nenhuma aula agendada</div>'
         + '<div class="dash-hero-end">Aproveite para planejar a semana.</div></div>';
     } else {
-      var alvo = ativasHoje.filter(function(c){return c.status!=="concluida";})[0] || ativasHoje[0];
       var al = getAluno(alvo.alunoId);
+      var quando = (alvo.data===hojeStr ? "Hoje" : fmtDataBR(alvo.data)) + " · " + alvo.hora;
       heroBox.innerHTML = '<div class="dash-hero">'
         + '<div class="dash-hero-top"><div><div class="dash-hero-label">Seu próximo atendimento</div>'
-        +   '<div class="dash-hero-time">'+alvo.hora+'</div></div>'
+        +   '<div class="dash-hero-time">'+quando+'</div></div>'
         +   '<span class="dash-hero-badge">'+heroStatusLabel(alvo.status)+'</span></div>'
         + '<div class="dash-hero-aluno">'+esc(al.nome)+'</div>'
         + '<div class="dash-hero-end">'+al.endereco+'</div>'
@@ -3457,13 +3467,6 @@ import './styles.css';
         + '<div class="atv-main"><div class="atv-t">'+it.t+'</div><div class="atv-s">'+it.s+'</div></div></div>';
     }).join("") : '<div class="empty-state sm">Sem atividades recentes.</div>';
   }
-
-  window.buscaHeader = function(valor){
-    if (!document.getElementById("screen-alunos").classList.contains("active")) irParaTab("alunos");
-    var inp = document.getElementById("busca-alunos");
-    if (inp) inp.value = valor;
-    filtrarAlunos(valor);
-  };
 
   function cardAula(c, aluno, mostrarData){
     var titulo = (mostrarData ? fmtDataBR(c.data)+' · ' : '') + c.hora + ' · ' + esc(aluno.nome);
