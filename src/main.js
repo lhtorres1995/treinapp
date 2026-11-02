@@ -3063,33 +3063,49 @@ import './styles.css';
   window.confirmarExcluirAluno = function(id){
     var aluno = getAluno(id);
     if (!aluno) return;
-    var temAulas = state.aulas.some(function(c){ return c.alunoId===id; });
-    var temPagamentos = state.pagamentos.some(function(p){ return p.alunoId===id; });
-    if (temAulas || temPagamentos){
-      pedirConfirmacao(
-        "Excluir aluno",
-        "Não é possível excluir "+aluno.nome+": ele já tem aulas e/ou cobranças lançadas no histórico, e excluir apagaria esse histórico. Em vez disso, use \"Inativar aluno\" — o cadastro some das listas ativas, mas o histórico fica preservado. Deseja inativar agora?",
-        "Inativar",
-        function(){ if (aluno.ativo) alternarAtivoAluno(id); else mostrarToast("Esse aluno já está inativo."); }
-      );
-      return;
-    }
     pedirConfirmacao(
       "Excluir aluno",
-      "Isso apaga o cadastro de "+aluno.nome+" permanentemente. Ele não tem nenhuma aula ou cobrança lançada, então não há histórico a perder. Tem certeza?",
-      "Excluir",
+      "Isso apaga PERMANENTEMENTE o cadastro de "+aluno.nome+" e TODO o histórico dele: aulas, cobranças, avaliações físicas e o acesso/login ao portal do aluno. Essa ação não pode ser desfeita. Se o aluno só foi cadastrado errado, considere \"Inativar aluno\", que preserva o histórico. Tem certeza que quer excluir tudo?",
+      "Excluir tudo",
       function(){ excluirAluno(id); }
     );
   };
 
-  window.excluirAluno = function(id){
-    var antes = state.alunos.length;
-    state.alunos = state.alunos.filter(function(a){ return a.id !== id; });
-    if (state.alunos.length === antes) return;
-    salvarEstado();
-    voltarListaAlunos();
-    renderAll();
-    mostrarToast("Aluno excluído.");
+  // Exclusão definitiva: vai pela Edge Function excluir-aluno, que valida posse
+  // (RLS, com o JWT deste personal) e, com a service role, apaga a linha do
+  // aluno — o CASCADE no banco derruba todo o histórico — e remove o login
+  // (auth.users). A service role nunca passa pelo navegador.
+  window.excluirAluno = async function(id){
+    var aluno = getAluno(id);
+    if (!aluno) return;
+    mostrarToast("Excluindo aluno...");
+    try {
+      var sessao = await sb.auth.getSession();
+      var token = sessao.data.session && sessao.data.session.access_token;
+      if (!token) throw new Error("sem sessão");
+      var r = await sb.functions.invoke("excluir-aluno", {
+        body: { alunoId: id },
+        headers: { Authorization: "Bearer " + token }
+      });
+      if (r.error) throw r.error;
+      if (r.data && r.data.error) throw new Error(r.data.error);
+      // Recarrega do servidor (fonte da verdade) em vez de mexer no estado
+      // local: o CASCADE apagou linhas de várias tabelas de uma vez.
+      await carregarDadosDoServidor();
+      voltarListaAlunos();
+      renderAll();
+      mostrarToast((r.data && r.data.aviso) ? r.data.aviso : "Aluno e todo o histórico excluídos.");
+    } catch(err){
+      console.error(err);
+      var msg = (err && err.message) || "Erro ao excluir o aluno.";
+      try {
+        if (err && err.context && typeof err.context.json === "function") {
+          var corpo = await err.context.json();
+          if (corpo && corpo.error) msg = corpo.error;
+        }
+      } catch(e){}
+      mostrarToast(msg);
+    }
   };
 
   // Chama a Edge Function convidar-aluno (ver supabase/functions/convidar-aluno).
