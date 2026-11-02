@@ -12,12 +12,18 @@
 //   2) Valida, usando um client com ESSE JWT (nunca a service role pra isso),
 //      que o aluno existe e pertence a esse personal — a RLS garante: o select
 //      só retorna linha se professor_id = auth.uid().
-//   3) Só então usa a service role (que nunca chega ao navegador) para:
-//        a) apagar a linha do aluno — o que, por CASCADE no banco, derruba
-//           todo o histórico (aulas, pagamentos, avaliações físicas + itens +
-//           histórico, push_subscriptions, solicitações);
-//        b) apagar o usuário de auth.users (login/acesso ao portal), se o
-//           aluno já tinha acesso vinculado (auth_user_id).
+//   3) Apaga a linha do aluno usando o CLIENT DO PERSONAL (o JWT recebido),
+//      não a service role. Isso é importante: a RLS já permite o personal
+//      excluir o próprio aluno, a cascata do banco derruba todo o histórico
+//      (aulas, pagamentos, avaliações físicas + itens + histórico,
+//      push_subscriptions, solicitações) de qualquer forma, e — ao rodar com
+//      o JWT do personal — auth.uid() fica preenchido dentro dos triggers de
+//      auditoria que disparam na cascata (ex.: histórico de item de avaliação
+//      física, que grava alterado_por = auth.uid() com NOT NULL). Com a
+//      service role, auth.uid() seria null e a exclusão abortaria.
+//   4) Só então usa a service role (que nunca chega ao navegador) para apagar
+//      o usuário de auth.users (login/acesso ao portal), se o aluno já tinha
+//      acesso vinculado (auth_user_id).
 //
 // Ordem importa: a linha de `alunos` referencia auth.users via auth_user_id,
 // então apagamos o aluno PRIMEIRO (removendo essa referência e todo o
@@ -82,9 +88,9 @@ Deno.serve(async (req) => {
   // Posse EXPLÍCITA, não só a visibilidade do SELECT: a tabela `alunos` tem
   // uma policy que deixa o próprio aluno ver seu cadastro (auth.uid() =
   // auth_user_id). Sem o filtro professor_id abaixo, um ALUNO logado poderia
-  // chamar esta função com o próprio id, passar nesse SELECT e disparar um
-  // delete (service role) de registros que são do PERSONAL. Exigir
-  // professor_id = quem chamou garante que só o personal dono exclui.
+  // chamar esta função com o próprio id e passar nesse SELECT. Exigir
+  // professor_id = quem chamou garante que só o personal dono exclui (a RLS
+  // de DELETE já bloquearia o aluno, mas deixamos explícito).
   const { data: aluno, error: alunoErr } = await comoPersonal
     .from("alunos")
     .select("id, nome, auth_user_id, professor_id")
@@ -120,11 +126,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 1) Apaga a linha do aluno (com o mesmo filtro de posse). As FKs ON DELETE
-  //    CASCADE no banco derrubam, na mesma transação, aulas, pagamentos,
-  //    avaliações físicas (+ itens + histórico), push_subscriptions e
-  //    solicitações desse aluno.
-  const { error: delErr } = await admin
+  // 1) Apaga a linha do aluno COM O CLIENT DO PERSONAL (não a service role),
+  //    para que auth.uid() fique preenchido nos triggers de auditoria que
+  //    disparam durante a cascata (senão o INSERT em
+  //    avaliacoes_fisicas_historico, com alterado_por NOT NULL, aborta tudo).
+  //    A RLS restringe a exclusão ao aluno do próprio personal; o filtro
+  //    professor_id abaixo é defesa extra. As FKs ON DELETE CASCADE derrubam,
+  //    na mesma transação, aulas, pagamentos, avaliações físicas (+ itens +
+  //    histórico), push_subscriptions e solicitações desse aluno — a cascata
+  //    não depende de RLS/grants nas tabelas filhas.
+  const { error: delErr } = await comoPersonal
     .from("alunos")
     .delete()
     .eq("id", aluno.id)
