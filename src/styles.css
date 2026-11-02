@@ -93,6 +93,20 @@
   .app-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
   .app-sub { font-size: 12.5px; color: var(--fg-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
+  /* Botão de atualizar: só aparece no mobile (ver breakpoint), onde recarregar
+     o app à mão é incômodo. No desktop basta recarregar a página. */
+  .header-refresh {
+    display: none; align-items: center; justify-content: center;
+    width: 40px; height: 40px; flex: none;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; color: var(--fg); cursor: pointer;
+    box-shadow: var(--shadow-card);
+  }
+  .header-refresh svg { width: 19px; height: 19px; }
+  .header-refresh:active { background: var(--surface-alt); }
+  .header-refresh.spinning { pointer-events: none; opacity: .7; }
+  .header-refresh.spinning svg { animation: header-refresh-spin .8s linear infinite; }
+  @keyframes header-refresh-spin { to { transform: rotate(360deg); } }
   .header-profile { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 13px 4px 4px; box-shadow: var(--shadow-card); }
   .header-profile .avatar { width: 30px; height: 30px; font-size: 11px; flex: none; }
   .header-profile-name { font-size: 12.5px; font-weight: 700; line-height: 1.15; }
@@ -930,6 +944,7 @@
     .app-header { padding: 14px 14px 2px; flex-wrap:wrap; }
     .app-title { font-size:19px; }
     .header-profile { display:none; }
+    .header-refresh { display:inline-flex; }
     .fab { bottom: calc(76px + env(safe-area-inset-bottom,0px)) !important; }
   }
   @media (max-width: 620px){

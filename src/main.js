@@ -742,6 +742,25 @@ import './styles.css';
     });
   };
 
+  // Recarrega os dados do servidor sem fechar/reabrir o app (botão no header,
+  // visível no mobile). Só leitura: atualiza o estado e re-renderiza.
+  window.atualizarDados = async function(){
+    if (!usuarioId) return;
+    var btn = document.querySelector(".header-refresh");
+    if (btn && btn.classList.contains("spinning")) return;
+    if (btn) btn.classList.add("spinning");
+    try {
+      await carregarDadosDoServidor();
+      renderAll();
+      mostrarToast("Dados atualizados.");
+    } catch(err){
+      console.error(err);
+      mostrarToast("Não foi possível atualizar agora. Verifique sua conexão.");
+    } finally {
+      if (btn) btn.classList.remove("spinning");
+    }
+  };
+
   // Rede de segurança: dá uma janela curta para o próprio onAuthStateChange
   // (INITIAL_SESSION ou PASSWORD_RECOVERY, registrado acima) ser a fonte
   // única de verdade sobre o que mostrar. Só chama getSession() por conta
