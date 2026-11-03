@@ -794,8 +794,10 @@ import './styles.css';
     document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
     document.getElementById("screen-"+nome).classList.add("active");
     document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===nome); });
+    document.querySelectorAll(".nd-item").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===nome); });
     document.getElementById("alunos-lista-view").hidden = false;
     document.getElementById("alunos-detalhe-view").hidden = true;
+    fecharMenu();
     renderAll();
   };
 
@@ -3200,8 +3202,8 @@ import './styles.css';
     var h = hoje.getHours();
     var saud = h < 12 ? "Bom dia" : (h < 18 ? "Boa tarde" : "Boa noite");
     var g = document.getElementById("header-greeting"); if (g) g.textContent = saud + ", " + primeiro + "!";
-    ["side-name","head-name"].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent = nome; });
-    ["side-avatar","head-avatar"].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent = ini; });
+    ["side-name","head-name","nd-name"].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent = nome; });
+    ["side-avatar","head-avatar","nd-avatar"].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent = ini; });
   }
 
   function heroStatusLabel(s){
@@ -4426,9 +4428,11 @@ import './styles.css';
     var pend = state.solicitacoes.filter(function(s){ return s.status==="em_analise"; });
     var contra = state.solicitacoes.filter(function(s){ return s.status==="contraproposta"; });
     var resp = state.solicitacoes.filter(function(s){ return s.status==="aprovada" || s.status==="negada"; });
-    var badge = document.getElementById("solic-badge");
     var nAgir = pend.length; // só as que pedem ação sua
-    if (badge){ if (nAgir){ badge.textContent = nAgir; badge.hidden = false; } else { badge.hidden = true; } }
+    ["solic-badge","nd-solic-badge"].forEach(function(bid){
+      var badge = document.getElementById(bid);
+      if (badge){ if (nAgir){ badge.textContent = nAgir; badge.hidden = false; } else { badge.hidden = true; } }
+    });
     var elP = document.getElementById("solic-pendentes");
     var elR = document.getElementById("solic-respondidas");
     if (!elP) return;
@@ -4596,5 +4600,48 @@ import './styles.css';
       mostrarToast("Notificações desativadas.");
       renderNotifPersonal();
     }catch(e){ console.error(e); mostrarToast("Não consegui desativar."); renderNotifPersonal(); }
+  };
+
+  /* ===================== MENU LATERAL MOBILE (drawer) ===================== */
+  var _ndLastFocus = null;
+  function _ndFocusables(){
+    var p = document.querySelector("#nav-drawer .nd-panel");
+    if(!p) return [];
+    return Array.prototype.slice.call(p.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])'))
+      .filter(function(el){ return !el.disabled && el.offsetParent !== null; });
+  }
+  function _ndKeydown(e){
+    if(e.key === "Escape"){ e.preventDefault(); fecharMenu(); return; }
+    if(e.key !== "Tab") return;
+    var f = _ndFocusables();
+    if(!f.length) return;
+    var first = f[0], last = f[f.length-1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+  window.abrirMenu = function(){
+    var d = document.getElementById("nav-drawer");
+    if(!d || d.classList.contains("open")) return;
+    _ndLastFocus = document.activeElement;
+    d.classList.add("open");
+    d.setAttribute("aria-hidden","false");
+    var burger = document.querySelector(".nd-burger");
+    if(burger) burger.setAttribute("aria-expanded","true");
+    document.body.classList.add("nd-lock");
+    document.addEventListener("keydown", _ndKeydown);
+    var closeBtn = d.querySelector(".nd-close");
+    if(closeBtn) setTimeout(function(){ closeBtn.focus(); }, 60);
+  };
+  window.fecharMenu = function(){
+    var d = document.getElementById("nav-drawer");
+    if(!d || !d.classList.contains("open")) return;
+    d.classList.remove("open");
+    d.setAttribute("aria-hidden","true");
+    var burger = document.querySelector(".nd-burger");
+    if(burger) burger.setAttribute("aria-expanded","false");
+    document.body.classList.remove("nd-lock");
+    document.removeEventListener("keydown", _ndKeydown);
+    if(_ndLastFocus && _ndLastFocus.focus){ try{ _ndLastFocus.focus(); }catch(_){} }
+    _ndLastFocus = null;
   };
 })();
