@@ -1162,3 +1162,23 @@
 .perfil-notif-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .perfil-notif-on{display:inline-flex;align-items:center;gap:6px;color:var(--success);font-weight:700;font-size:13.5px;}
 .perfil-notif-on svg{width:16px;height:16px;}
+
+/* ===== Cancelamentos (Etapa 3) ===== */
+.cancel-banner{border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.4;}
+.cancel-banner.warn{background:var(--accent-soft);color:var(--accent);}
+.cancel-banner.ok{background:rgba(0,0,0,.04);color:var(--fg-muted);}
+.cancel-card{margin-bottom:12px;}
+.cancel-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.cancel-faixa-linha{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid rgba(0,0,0,.06);font-size:13.5px;}
+.cancel-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid rgba(0,0,0,.06);}
+.cancel-item:first-of-type{border-top:none;}
+.cancel-info{background:rgba(0,0,0,.04);border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0;}
+.cancel-check{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:6px 0;}
+.cancel-faixas-head,.cfx-row{display:grid;grid-template-columns:1fr 1fr 1fr 34px;gap:8px;align-items:center;}
+.cancel-faixas-head{font-size:12px;color:var(--fg-muted);margin:8px 0 4px;}
+.cfx-row{margin-bottom:6px;}
+.cfx-row input{width:100%;}
+.cancel-preview{margin:10px 0;font-size:13px;}
+.cancel-preview-ok{color:var(--fg-muted);font-size:12.5px;margin-bottom:4px;}
+.cancel-preview-err{color:var(--danger,#c0392b);font-size:12.5px;}
+.btn.xs{padding:3px 8px;font-size:12px;border-radius:7px;}

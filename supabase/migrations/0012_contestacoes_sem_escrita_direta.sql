@@ -1,0 +1,27 @@
+-- ============================================================================
+-- LT360 — Hardening: contestações só graváveis via RPC (sem escrita direta)
+--
+-- ✅ STATUS: APLICADA em produção (trainer-flow) em 2026-11-04, com autorização
+--    explícita do usuário, via Supabase MCP apply_migration. A 0009 havia sido
+--    aplicada COM as policies de escrita direta; esta migração as removeu.
+--    Não reaplicar.
+--
+-- Achado (revisão de segurança automática, MEDIUM — Broken Access Control):
+-- as policies de escrita direta em `public.contestacoes` criadas pela 0009
+-- permitem que:
+--   * o personal faça UPDATE de QUALQUER coluna (motivo/aluno_id/
+--     cancelamento_id/created_at/status), não só responder — adulterando o
+--     registro do aluno e PULANDO a auditoria (a resposta via UPDATE direto
+--     não gera o evento 'contestacao_respondida');
+--   * o aluno faça INSERT já com status='respondida'/resposta preenchida.
+--
+-- Correção: remover as policies de escrita direta. Os DOIS portais já gravam
+-- SOMENTE pelas RPCs SECURITY DEFINER `abrir_contestacao` (INSERT) e
+-- `responder_contestacao` (UPDATE), que validam posse e gravam auditoria — logo
+-- NÃO há caminho de escrita direta em uso e a UI não quebra. As policies de
+-- SELECT (aluno lê as próprias; personal lê as suas) permanecem para exibição.
+-- Alinha `contestacoes` ao padrão de `cancelamentos` (leitura por RLS; escrita
+-- só por RPC auditada).
+-- ============================================================================
+drop policy if exists "contestacoes: personal responde as suas" on public.contestacoes;
+drop policy if exists "contestacoes: aluno cria sobre o próprio cancelamento" on public.contestacoes;
