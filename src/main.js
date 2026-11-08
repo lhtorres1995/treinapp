@@ -4691,7 +4691,8 @@ import './styles.css';
         (c.resolucao_tipo ? ' · resolvido: '+esc(c.resolucao_tipo) :
           ' · <button class="btn xs" onclick="cancelAbrirResolucao(\''+c.id+'\')">Registrar resolução</button>')+'</div>' : "";
       return '<div class="cancel-item"><div><b>'+esc(al?al.nome:"(aluno)")+'</b>'+
-        '<div class="card-sub">'+esc(c.origem_comunicacao||"")+' · '+fin+'</div>'+dif+'</div></div>';
+        '<div class="card-sub">Aula de '+cancelFmtDataHora(c.aula_data_hora_original)+'</div>'+
+        '<div class="card-sub">'+esc(cancelCanalLabel(c.origem_comunicacao))+' · '+fin+'</div>'+dif+'</div></div>';
     }).join("") : '<div class="hint">Nenhum cancelamento registrado ainda.</div>';
     return '<div class="card cancel-card"><div class="card-title">Histórico de cancelamentos</div>'+linhas+'</div>';
   }
@@ -4701,7 +4702,9 @@ import './styles.css';
     if (!cancelData.contestacoes.length) return "";
     var linhas = cancelData.contestacoes.map(function(ct){
       var al = getAluno(ct.aluno_id);
-      return '<div class="cancel-item"><div><b>'+esc(al?al.nome:"(aluno)")+'</b>'+
+      var c = null; for (var i=0;i<cancelData.lista.length;i++){ if (cancelData.lista[i].id===ct.cancelamento_id){ c=cancelData.lista[i]; break; } }
+      var aulaRef = c ? ('<div class="card-sub">Aula de '+cancelFmtDataHora(c.aula_data_hora_original)+'</div>') : '';
+      return '<div class="cancel-item"><div><b>'+esc(al?al.nome:"(aluno)")+'</b>'+ aulaRef +
         '<div class="card-sub">"'+esc(ct.motivo||"")+'" — '+esc(ct.status)+'</div>'+
         (ct.resposta?'<div class="card-sub">Resposta: '+esc(ct.resposta)+'</div>':'')+'</div>'+
         (ct.status==="aberta"?'<div class="action-row"><button class="btn sm" onclick="cancelAbrirRespContestacao(\''+ct.id+'\')">Responder</button></div>':'')+
