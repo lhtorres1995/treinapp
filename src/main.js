@@ -561,6 +561,7 @@ import './styles.css';
       dataSugerida: r.data_sugerida, horaSugerida: (r.hora_sugerida||"").slice(0,5),
       contraData: r.contra_data, contraHora: (r.contra_hora||"").slice(0,5),
       mensagem: r.mensagem || "", status: r.status, resposta: r.resposta || "",
+      avisoExterno: !!r.aviso_externo, avisoCanal: r.aviso_canal || null, avisoEm: r.aviso_em || null,
       createdAt: r.created_at, respondidaEm: r.respondida_em
     };
   }
@@ -3526,7 +3527,13 @@ import './styles.css';
       if (c.status==="agendada") html += '<button class="btn sm" onclick="confirmarAula(\''+c.id+'\')">'+ICONS.check+' Confirmar</button>';
       if (!aulaEhFutura(c)) html += '<button class="btn sm primary" onclick="confirmarConcluir(\''+c.id+'\')">Concluir</button>';
       html += '<button class="btn sm" onclick="abrirModalRemarcar(\''+c.id+'\')">Remarcar</button>';
-      html += '<button class="btn sm" onclick="confirmarCancelar(\''+c.id+'\')">Cancelar</button>';
+      // Um único botão "Cancelar": com o fluxo novo ativo ele abre o registro de
+      // cancelamento com política/percentual (0% = abono); senão mantém o
+      // comportamento antigo (cancelarAula). Evita botão duplicado e não deixa
+      // o caminho legado (que reverte a cobrança) disponível quando o novo vale.
+      html += cancelFluxoAtivo()
+        ? '<button class="btn sm" onclick="cancelAbrirDireto(\''+c.id+'\')">Cancelar</button>'
+        : '<button class="btn sm" onclick="confirmarCancelar(\''+c.id+'\')">Cancelar</button>';
     } else if (c.status==="cancelada"){
       html += '<button class="btn sm" onclick="abrirModalRemarcar(\''+c.id+'\')">Remarcar</button>';
     } else if (c.status==="concluida"){
@@ -4401,13 +4408,19 @@ import './styles.css';
     var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+esc(s.mensagem)+'"</div>' : '';
     var sugerir = s.tipo==="remarcar"
       ? '<button class="btn sm" onclick="abrirSugerirHorario(\''+s.id+'\')">Sugerir horário</button>' : '';
+    var avisoTag = (s.tipo==="cancelar" && s.avisoExterno)
+      ? '<div class="solic-linha solic-aviso">Aluno declara aviso prévio por '+esc(cancelCanalLabel(s.avisoCanal))+(s.avisoEm?(' em '+cancelFmtDataHora(s.avisoEm)):'')+'</div>' : '';
+    // Fluxo novo de cancelamento: um único botão "Analisar" abre o modal de
+    // decisão (com política/percentual e opção de aprovar ou recusar).
+    var botoes = (s.tipo==="cancelar" && cancelFluxoAtivo())
+      ? (waAlunoBtn(s) + '<button class="btn primary sm" onclick="cancelAbrirDecisao(\''+s.id+'\')">Analisar</button>')
+      : (waAlunoBtn(s) +
+         '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+ sugerir +
+         '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>');
     return '<div class="solic-card-pro">'+
       '<div class="solic-card-top">'+tagTipo(s)+'<span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span></div>'+
-      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ sugestao + msg +
-      '<div class="solic-botoes">'+ waAlunoBtn(s) +
-        '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+ sugerir +
-        '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>'+
-      '</div></div>';
+      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ sugestao + avisoTag + msg +
+      '<div class="solic-botoes">'+ botoes +'</div></div>';
   }
   function cardSolicContraproposta(s){
     return '<div class="solic-card-pro">'+
@@ -4455,12 +4468,16 @@ import './styles.css';
   }
   window.recusarSolicitacao = function(id){
     var s = findSolic(id); if (!s) return;
+    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id); return; }
     pedirConfirmacao("Recusar solicitação", "Recusar este pedido? O aluno verá como \"Negada\".", "Recusar", function(){
       atualizarStatusSolic(id, "negada").then(function(){ mostrarToast("Solicitação recusada."); }).catch(function(){});
     });
   };
   window.aceitarSolicitacao = function(id){
     var s = findSolic(id); if (!s) return;
+    // Fluxo novo (quando ativo): decisão com percentual via RPC, sem usar o
+    // cancelamento client-side antigo. Enquanto inativo, segue o fluxo atual.
+    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id); return; }
     if (s.tipo==="cancelar"){
       pedirConfirmacao("Aceitar cancelamento", "A aula será cancelada e o pedido marcado como aprovado. Continuar?", "Aceitar e cancelar", function(){
         if (findAula(s.aulaId)) cancelarAula(s.aulaId);   // aplica o cancelamento na agenda
@@ -4531,7 +4548,492 @@ import './styles.css';
     renderPerfil();
     renderDisponibilidade();
     renderSolicitacoes();
+    renderCancelamentos();
   }
+
+  /* ===================== CANCELAMENTOS (Etapa 3 — UI) =====================
+     Interface do plano V2, ligada às RPCs das migrações 0009/0010. Enquanto o
+     backend NÃO estiver aplicado+validado, CANCELAMENTO_V2_ATIVO fica false: o
+     botão "Cancelar" antigo e o fluxo atual seguem intactos, nenhuma ação nova
+     é ligada na agenda/solicitações e NADA é simulado como sucesso. A tela e o
+     editor de política ficam visíveis para revisão; ações que dependem das RPCs
+     são bloqueadas com aviso claro quando o recurso não está disponível. */
+  var CANCELAMENTO_V2_ATIVO = true; // backend 0009–0012 aplicado e validado (2026-11-04)
+  var cancelV2Disp = null;           // probe de disponibilidade (null=não checado)
+  var cancelData = { politica: null, lista: [], contestacoes: [] };
+
+  async function cancelProbe(){
+    if (cancelV2Disp !== null) return cancelV2Disp;
+    try {
+      var r = await sb.from("politicas_cancelamento").select("professor_id").limit(1);
+      cancelV2Disp = !r.error;
+    } catch(e){ cancelV2Disp = false; }
+    return cancelV2Disp;
+  }
+  // Fluxo novo ligado na agenda/solicitações só quando o flag E a disponibilidade
+  // confirmarem — garante que o comportamento atual nunca é substituído antes do
+  // backend estar pronto.
+  function cancelFluxoAtivo(){ return CANCELAMENTO_V2_ATIVO && cancelV2Disp === true; }
+  window.cancelFluxoAtivo = cancelFluxoAtivo;
+
+  function cancelBRL(v){ return "R$ " + Number(v||0).toFixed(2).replace(".", ","); }
+  function cancelPercentualSugerido(faixas, horas){
+    if (!Array.isArray(faixas)) return null;
+    for (var i=0;i<faixas.length;i++){
+      var f = faixas[i];
+      var de = Number(f.de_horas), ate = (f.ate_horas==null?null:Number(f.ate_horas));
+      if (horas >= de && (ate==null || horas < ate)) return Number(f.percentual);
+    }
+    return null;
+  }
+  // Mesma regra do servidor (validar_faixas_cancelamento): ORDEM-INDEPENDENTE —
+  // normaliza/ordena por de_horas e confere cobertura contígua de [0, ∞) sem
+  // lacuna/sobreposição, última aberta. O editor exibe em ordem decrescente, por
+  // isso não se pode exigir uma ordem específica. Retorna null se ok.
+  function cancelValidarFaixas(faixas){
+    if (!Array.isArray(faixas) || faixas.length===0) return "Defina pelo menos uma faixa.";
+    var norm = [];
+    for (var i=0;i<faixas.length;i++){
+      var f = faixas[i];
+      var de = Number(f.de_horas), pct = Number(f.percentual);
+      var ate = (f.ate_horas==null||f.ate_horas==="")?null:Number(f.ate_horas);
+      if (isNaN(de)||isNaN(pct)) return "Faixa "+(i+1)+": preencha horas e percentual.";
+      if (pct<0||pct>100) return "Faixa "+(i+1)+": percentual deve ficar entre 0 e 100.";
+      if (ate!=null && ate<=de) return "Faixa "+(i+1)+": 'até' deve ser maior que 'de'.";
+      norm.push({ de:de, ate:ate });
+    }
+    norm.sort(function(a,b){ return a.de - b.de; });
+    var esperado = 0, temAberta = false;
+    for (var j=0;j<norm.length;j++){
+      if (temAberta) return "Há uma faixa depois da faixa aberta (sem 'até').";
+      if (norm[j].de!==esperado) return "As faixas têm lacuna ou sobreposição perto de "+esperado+"h.";
+      if (norm[j].ate!=null) esperado = norm[j].ate; else temAberta = true;
+    }
+    if (!temAberta) return "A última faixa deve ficar aberta (sem 'até'), cobrindo o infinito.";
+    return null;
+  }
+
+  function cancelBanner(txt, tom){
+    return '<div class="cancel-banner '+(tom||'')+'">'+txt+'</div>';
+  }
+  function cancelEstadoTexto(){
+    if (!CANCELAMENTO_V2_ATIVO)
+      return cancelBanner("Novo fluxo em pré-visualização. As ações na agenda e nas solicitações só serão ligadas depois que o backend (migrações 0009/0010) for aplicado e validado — até lá, o cancelamento atual segue funcionando normalmente.", "warn");
+    if (cancelV2Disp !== true)
+      return cancelBanner("Backend das políticas de cancelamento ainda não disponível neste servidor. As ações estão desativadas para não simular resultados.", "warn");
+    return cancelBanner("Fluxo de cancelamentos ativo.", "ok");
+  }
+
+  async function cancelCarregar(){
+    try {
+      var pol = await sb.from("politicas_cancelamento").select("*").eq("professor_id", usuarioId).maybeSingle();
+      cancelData.politica = (pol && !pol.error) ? (pol.data || null) : null;
+      var can = await sb.from("cancelamentos").select("*").eq("professor_id", usuarioId).order("created_at", { ascending: false });
+      cancelData.lista = (can && !can.error) ? (can.data || []) : [];
+      var con = await sb.from("contestacoes").select("*").eq("professor_id", usuarioId).order("created_at", { ascending: false });
+      cancelData.contestacoes = (con && !con.error) ? (con.data || []) : [];
+    } catch(e){ /* mantém estado anterior; sem dados fictícios */ }
+  }
+
+  function renderCancelamentos(){
+    var box = document.getElementById("cancel-conteudo");
+    if (!box) return;
+    cancelProbe().then(function(disp){
+      if (disp){ cancelCarregar().then(function(){ cancelRenderConteudo(box); }); }
+      else { cancelRenderConteudo(box); }
+    });
+  }
+
+  function cancelCardPolitica(){
+    var p = cancelData.politica;
+    var resumo;
+    if (p && p.ativo && Array.isArray(p.faixas) && p.faixas.length){
+      resumo = p.faixas.map(function(f){
+        var faixa = f.ate_horas==null ? (f.de_horas+"h ou mais")
+          : (f.de_horas+"h a menos de "+f.ate_horas+"h");
+        return '<div class="cancel-faixa-linha"><span>'+esc(faixa)+'</span><b>'+Number(f.percentual)+'%</b></div>';
+      }).join("");
+    } else {
+      resumo = '<div class="hint">Política ainda não configurada'+(p && !p.ativo ? " (desativada)" : "")+'.</div>';
+    }
+    return '<div class="card cancel-card">'+
+      '<div class="cancel-card-top"><div class="card-title">Política de cancelamento</div>'+
+      '<button class="btn sm" onclick="cancelAbrirConfig()">Configurar faixas</button></div>'+
+      resumo +
+      '<div class="hint" style="margin-top:8px;">A política sugere o percentual; a decisão final é sempre sua.</div>'+
+      '</div>';
+  }
+
+  function cancelListaPedidos(){
+    var pend = (state.solicitacoes||[]).filter(function(s){ return s.tipo==="cancelar" && (s.status==="em_analise"||s.status==="contraproposta"); });
+    if (!cancelFluxoAtivo()){
+      return '<div class="card cancel-card"><div class="card-title">Pedidos de cancelamento</div>'+
+        '<div class="hint">Os pedidos de cancelamento continuam sendo tratados na aba <b>Solicitações</b> pelo fluxo atual. A decisão com percentual aparece aqui quando o novo fluxo for ativado.</div></div>';
+    }
+    var linhas = pend.length ? pend.map(function(s){
+      var a = findAula(s.aulaId); var al = getAluno(s.alunoId);
+      return '<div class="cancel-item">'+
+        '<div><b>'+esc(al?al.nome:"(aluno)")+'</b><div class="card-sub">'+(a?fmtDataBR(a.data)+" · "+a.hora:"(aula)")+(s.avisoExterno?" · avisou por "+esc(cancelCanalLabel(s.avisoCanal)):"")+'</div></div>'+
+        '<div class="action-row"><button class="btn primary sm" onclick="cancelAbrirDecisao(\''+s.id+'\')">Analisar</button></div></div>';
+    }).join("") : '<div class="hint">Nenhum pedido de cancelamento em análise.</div>';
+    return '<div class="card cancel-card"><div class="card-title">Pedidos de cancelamento</div>'+linhas+'</div>';
+  }
+
+  function cancelHistorico(){
+    if (cancelV2Disp !== true){
+      return '<div class="card cancel-card"><div class="card-title">Histórico</div><div class="hint">Disponível após a ativação do backend.</div></div>';
+    }
+    var linhas = cancelData.lista.length ? cancelData.lista.map(function(c){
+      var al = getAluno(c.aluno_id);
+      var fin = (c.valor_devido==null) ? "sem efeito financeiro"
+        : (cancelBRL(c.valor_devido)+" devido ("+Number(c.percentual_aplicado)+"%)");
+      var dif = (c.diferenca!=null) ? '<div class="card-sub">Pago: '+cancelBRL(c.valor_pago_original)+' · diferença: '+cancelBRL(c.diferenca)+
+        (c.resolucao_tipo ? ' · resolvido: '+esc(c.resolucao_tipo) :
+          ' · <button class="btn xs" onclick="cancelAbrirResolucao(\''+c.id+'\')">Registrar resolução</button>')+'</div>' : "";
+      return '<div class="cancel-item"><div><b>'+esc(al?al.nome:"(aluno)")+'</b>'+
+        '<div class="card-sub">Aula de '+cancelFmtDataHora(c.aula_data_hora_original)+'</div>'+
+        '<div class="card-sub">'+esc(cancelCanalLabel(c.origem_comunicacao))+' · '+fin+'</div>'+dif+'</div></div>';
+    }).join("") : '<div class="hint">Nenhum cancelamento registrado ainda.</div>';
+    return '<div class="card cancel-card"><div class="card-title">Histórico de cancelamentos</div>'+linhas+'</div>';
+  }
+
+  function cancelListaContestacoes(){
+    if (cancelV2Disp !== true) return "";
+    if (!cancelData.contestacoes.length) return "";
+    var linhas = cancelData.contestacoes.map(function(ct){
+      var al = getAluno(ct.aluno_id);
+      var c = null; for (var i=0;i<cancelData.lista.length;i++){ if (cancelData.lista[i].id===ct.cancelamento_id){ c=cancelData.lista[i]; break; } }
+      var aulaRef = c ? ('<div class="card-sub">Aula de '+cancelFmtDataHora(c.aula_data_hora_original)+'</div>') : '';
+      return '<div class="cancel-item"><div><b>'+esc(al?al.nome:"(aluno)")+'</b>'+ aulaRef +
+        '<div class="card-sub">"'+esc(ct.motivo||"")+'" — '+esc(ct.status)+'</div>'+
+        (ct.resposta?'<div class="card-sub">Resposta: '+esc(ct.resposta)+'</div>':'')+'</div>'+
+        (ct.status==="aberta"?'<div class="action-row"><button class="btn sm" onclick="cancelAbrirRespContestacao(\''+ct.id+'\')">Responder</button></div>':'')+
+        '</div>';
+    }).join("");
+    return '<div class="card cancel-card"><div class="card-title">Contestações</div>'+linhas+'</div>';
+  }
+
+  function cancelRenderConteudo(box){
+    box.innerHTML = cancelEstadoTexto() + cancelCardPolitica() + cancelListaPedidos() + cancelHistorico() + cancelListaContestacoes();
+  }
+
+  function cancelFecha(){ fecharModal("modal-cancel"); }
+  window.cancelFecha = cancelFecha;
+
+  /* ---- Editor de política (faixas) ---- */
+  window.cancelAbrirConfig = function(){
+    var p = cancelData.politica;
+    var faixas = (p && Array.isArray(p.faixas) && p.faixas.length) ? p.faixas : [
+      { de_horas:24, ate_horas:null, percentual:0 },
+      { de_horas:12, ate_horas:24, percentual:50 },
+      { de_horas:0,  ate_horas:12, percentual:100 }
+    ];
+    var rows = faixas.map(cancelFaixaRowHtml).join("");
+    document.getElementById("modal-cancel-body").innerHTML =
+      '<div class="modal-head"><div><div class="modal-title">Política de cancelamento</div>'+
+      '<div class="modal-subtitle">Faixas de antecedência e percentual de cobrança sugerido.</div></div>'+
+      '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
+      '<label class="cancel-check"><input type="checkbox" id="cfx-ativo" '+((!p||p.ativo)?'checked':'')+'> Política ativa</label>'+
+      '<label class="cancel-check"><input type="checkbox" id="cfx-aprov" '+((!p||p.exige_aprovacao_aluno)?'checked':'')+' disabled> Pedido do aluno sempre exige aprovação</label>'+
+      '<div class="cancel-faixas-head"><span>De (h)</span><span>Até (h)</span><span>%</span><span></span></div>'+
+      '<div id="cfx-rows">'+rows+'</div>'+
+      '<button type="button" class="btn sm" onclick="cancelAddFaixa()">+ Adicionar faixa</button>'+
+      '<div class="hint" style="margin-top:8px;">Deixe "Até" vazio na última faixa (cobre o infinito). Intervalos [de, até): 24h cai em 0%, 12h em 50%.</div>'+
+      '<div id="cfx-preview" class="cancel-preview"></div>'+
+      '<button type="button" class="btn primary block" onclick="cancelSalvarPolitica()">Salvar política</button>';
+    cancelAtualizarPreview();
+    abrirModal("modal-cancel");
+  };
+  function cancelFaixaRowHtml(f){
+    return '<div class="cfx-row">'+
+      '<input class="cfx-de" type="number" min="0" step="1" value="'+(f.de_horas!=null?f.de_horas:"")+'" oninput="cancelAtualizarPreview()">'+
+      '<input class="cfx-ate" type="number" min="0" step="1" value="'+(f.ate_horas!=null?f.ate_horas:"")+'" placeholder="∞" oninput="cancelAtualizarPreview()">'+
+      '<input class="cfx-pct" type="number" min="0" max="100" step="1" value="'+(f.percentual!=null?f.percentual:"")+'" oninput="cancelAtualizarPreview()">'+
+      '<button type="button" class="btn xs ghost" onclick="cancelRemFaixa(this)">✕</button></div>';
+  }
+  window.cancelAddFaixa = function(){
+    var c = document.getElementById("cfx-rows");
+    c.insertAdjacentHTML("beforeend", cancelFaixaRowHtml({de_horas:"",ate_horas:"",percentual:""}));
+  };
+  window.cancelRemFaixa = function(btn){ var r = btn.closest(".cfx-row"); if (r) r.remove(); cancelAtualizarPreview(); };
+  function cancelLerFaixas(){
+    var arr = [];
+    document.querySelectorAll("#cfx-rows .cfx-row").forEach(function(r){
+      var de = r.querySelector(".cfx-de").value;
+      var ate = r.querySelector(".cfx-ate").value;
+      var pct = r.querySelector(".cfx-pct").value;
+      arr.push({ de_horas: de===""?null:Number(de), ate_horas: ate===""?null:Number(ate), percentual: pct===""?null:Number(pct) });
+    });
+    return arr;
+  }
+  window.cancelAtualizarPreview = function(){
+    var el = document.getElementById("cfx-preview"); if (!el) return;
+    var faixas = cancelLerFaixas();
+    var err = cancelValidarFaixas(faixas);
+    if (err){ el.innerHTML = '<div class="cancel-preview-err">'+esc(err)+'</div>'; return; }
+    var exemplos = [30,18,2].map(function(h){
+      var pct = cancelPercentualSugerido(faixas, h);
+      return '<div class="cancel-faixa-linha"><span>Cancelar com '+h+'h de antecedência</span><b>'+pct+'% ('+cancelBRL(100*pct/100)+' de R$ 100)</b></div>';
+    }).join("");
+    el.innerHTML = '<div class="cancel-preview-ok">Exemplos (aula de R$ 100):</div>'+exemplos;
+  };
+  window.cancelSalvarPolitica = function(){
+    var faixas = cancelLerFaixas();
+    var err = cancelValidarFaixas(faixas);
+    if (err){ mostrarToast(err); return; }
+    if (cancelV2Disp !== true){
+      mostrarToast("Recurso ainda não ativado no servidor (migrações 0009/0010 pendentes).");
+      return;
+    }
+    var ativo = document.getElementById("cfx-ativo").checked;
+    sb.rpc("configurar_politica", { p_ativo: ativo, p_exige_aprovacao_aluno: true, p_faixas: faixas }).then(function(r){
+      if (r.error){ console.error(r.error); mostrarToast("Não foi possível salvar a política."); return; }
+      cancelData.politica = r.data || cancelData.politica;
+      cancelFecha(); renderCancelamentos(); mostrarToast("Política salva.");
+    });
+  };
+
+  /* ---- Cancelamento direto (a partir da aula) ---- */
+  function cancelAntecedenciaHoras(a, refDate){
+    var hora = (a.hora && a.hora.length>=5) ? a.hora.slice(0,5) : "00:00";
+    var aulaDt = new Date(a.data+"T"+hora+":00");
+    return Math.max(0, (aulaDt - refDate) / 3600000);
+  }
+  window.cancelAbrirDireto = function(aulaId){
+    var a = findAula(aulaId); if (!a){ return; }
+    var al = getAluno(a.alunoId);
+    var faixas = (cancelData.politica && cancelData.politica.ativo) ? cancelData.politica.faixas : null;
+    var horas = cancelAntecedenciaHoras(a, new Date());
+    var sug = cancelPercentualSugerido(faixas, horas);
+    var porAula = al && al.plano && al.plano.cobranca === "por_aula";
+    var valorRef = porAula ? Number(al.plano.valorAula||0) : null;
+    var sugTxt = (sug==null) ? "sem sugestão (defina abaixo)" : (sug+"%");
+    var disponivel = cancelFluxoAtivo();
+    document.getElementById("modal-cancel-body").innerHTML =
+      '<div class="modal-head"><div><div class="modal-title">Registrar cancelamento</div>'+
+      '<div class="modal-subtitle">'+esc(al?al.nome:"")+' · '+fmtDataBR(a.data)+' · '+a.hora+'</div></div>'+
+      '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
+      (disponivel?'':cancelBanner("Pré-visualização: ação desativada até o backend ser ativado.","warn"))+
+      '<div class="field"><label>Origem da comunicação</label>'+
+      '<select id="cxd-origem"><option value="personal">Iniciativa do personal</option><option value="whatsapp">WhatsApp</option><option value="telefone">Telefone</option><option value="presencial">Presencial</option><option value="portal">Portal</option></select></div>'+
+      '<label class="cancel-check"><input type="checkbox" id="cxd-avisou" onchange="document.getElementById(\'cxd-aviso-box\').hidden=!this.checked"> O aluno avisou com antecedência por outro meio</label>'+
+      '<div id="cxd-aviso-box" hidden><div class="field-row"><div class="field"><label>Data do aviso</label><input id="cxd-aviso-data" type="date"></div><div class="field"><label>Hora do aviso</label><input id="cxd-aviso-hora" type="time"></div></div></div>'+
+      '<div class="cancel-info">Antecedência (agora): <b>'+Math.round(horas)+'h</b> · Política sugere: <b>'+sugTxt+'</b>'+(porAula?(' · Valor da aula: '+cancelBRL(valorRef)):' · Mensalidade fixa (sem efeito financeiro)')+'</div>'+
+      '<div class="field-row"><div class="field"><label>Percentual a cobrar</label><input id="cxd-pct" type="number" min="0" max="100" step="1" value="'+(sug!=null?sug:0)+'" oninput="cancelPreviewDireto('+(valorRef!=null?valorRef:'null')+')"></div>'+
+      '<div class="field"><label>Valor devido</label><input id="cxd-valor" type="text" disabled value="'+(porAula?cancelBRL((sug!=null?sug:0)*valorRef/100):"—")+'"></div></div>'+
+      '<div class="field"><label>Justificativa (obrigatória se diferente da política)</label><input id="cxd-just" type="text" placeholder="ex.: reconheci o aviso por WhatsApp"></div>'+
+      '<div class="field"><label>Observação</label><input id="cxd-obs" type="text"></div>'+
+      '<button type="button" class="btn primary block" '+(disponivel?'':'disabled')+' onclick="cancelSubmitDireto(\''+aulaId+'\','+(sug==null?'null':sug)+')">Confirmar cancelamento</button>';
+    abrirModal("modal-cancel");
+  };
+  window.cancelPreviewDireto = function(valorRef){
+    if (valorRef==null) return;
+    var pct = Number(document.getElementById("cxd-pct").value||0);
+    document.getElementById("cxd-valor").value = cancelBRL(pct*valorRef/100);
+  };
+  // Recarrega do servidor (FONTE DE VERDADE) a aula e os pagamentos do aluno
+  // afetados por uma RPC de cancelamento, e alinha o ultimoSnapshot — assim a
+  // fila de sincronização otimista NÃO reempurra uma versão local defasada e
+  // nunca sobrescreve status/valor_faturado/valores gravados pela RPC. Mesmo
+  // princípio do fluxo de remarcar_aula. Deve rodar DENTRO de enfileirar().
+  function cancelReloadServidor(aulaId, alunoId){
+    return sb.from("aulas").select("*").eq("id", aulaId).maybeSingle().then(function(ra){
+      if (!ra.error && ra.data){
+        var nova = rowToAula(ra.data);
+        var i = -1;
+        for (var k=0;k<state.aulas.length;k++){ if (state.aulas[k].id===aulaId){ i=k; break; } }
+        if (i>=0) state.aulas[i] = nova; else state.aulas.push(nova);
+        ultimoSnapshot.aulas[aulaId] = JSON.stringify(nova);
+      }
+      if (!alunoId) return;
+      return sb.from("pagamentos").select("*").eq("aluno_id", alunoId).then(function(rp){
+        if (rp.error) return;
+        var novos = (rp.data||[]).map(rowToPagamento);
+        var novosIds = {}; novos.forEach(function(p){ novosIds[p.id] = true; });
+        // Pagamentos deste aluno que saíram do servidor -> limpar do snapshot.
+        state.pagamentos.forEach(function(p){
+          if (p.alunoId===alunoId && !novosIds[p.id]) delete ultimoSnapshot.pagamentos[p.id];
+        });
+        state.pagamentos = state.pagamentos.filter(function(p){ return p.alunoId!==alunoId; }).concat(novos);
+        novos.forEach(function(p){ ultimoSnapshot.pagamentos[p.id] = JSON.stringify(p); });
+      });
+    });
+  }
+
+  window.cancelSubmitDireto = function(aulaId, sug){
+    if (!cancelFluxoAtivo()){ mostrarToast("Recurso ainda não ativado no servidor."); return; }
+    var pct = Number(document.getElementById("cxd-pct").value||0);
+    var just = (document.getElementById("cxd-just").value||"").trim();
+    if (sug!=null && pct!==sug && !just){ mostrarToast("Percentual diferente da política exige justificativa."); return; }
+    var avisou = document.getElementById("cxd-avisou").checked;
+    var avisoEm = null, hcOrigem = "registro_personal";
+    if (avisou){
+      var d = document.getElementById("cxd-aviso-data").value, h = document.getElementById("cxd-aviso-hora").value;
+      if (d && h){ avisoEm = new Date(d+"T"+h+":00").toISOString(); hcOrigem = "aviso_externo"; }
+    }
+    var alunoId = (findAula(aulaId)||{}).alunoId;
+    var params = {
+      p_aula_id: aulaId,
+      p_origem_comunicacao: document.getElementById("cxd-origem").value,
+      p_percentual: pct,
+      p_justificativa: just || null,
+      p_motivo: (document.getElementById("cxd-obs").value||"").trim() || null,
+      p_aviso_externo: avisou,
+      p_aviso_canal: avisou ? document.getElementById("cxd-origem").value : null,
+      p_aviso_em: avisoEm,
+      p_horario_considerado_origem: hcOrigem
+    };
+    // Dentro da MESMA fila das sincronizações: a RPC não disputa estado/snapshot
+    // com um persist pendente, e o reload (fonte de verdade) roda logo após.
+    enfileirar(function(){
+      return sb.rpc("registrar_cancelamento_personal", params).then(function(r){
+        if (r.error) throw r.error;
+        return cancelReloadServidor(aulaId, alunoId);
+      });
+    }).then(function(){
+      invocarPush({ tipo:"aula_cancelada", aula_id: aulaId }); // dá ciência ao aluno
+      cancelFecha(); renderCancelamentos(); renderAll(); mostrarToast("Cancelamento registrado.");
+    }).catch(function(err){
+      console.error(err); mostrarToast("Não foi possível registrar o cancelamento.");
+    });
+  };
+
+  /* ---- Decisão de um pedido do aluno (Analisar → aprovar/recusar) ---- */
+  function cancelCanalLabel(c){
+    var m = { whatsapp:"WhatsApp", telefone:"Telefone", presencial:"Presencial", portal:"Portal", personal:"Iniciativa do personal" };
+    return m[c] || c || "outro meio";
+  }
+  function cancelFmtDataHora(iso){
+    if (!iso) return "—"; var d = new Date(iso); if (isNaN(d)) return "—";
+    function p(n){ return ("0"+n).slice(-2); }
+    return p(d.getDate())+"/"+p(d.getMonth()+1)+"/"+d.getFullYear()+" "+p(d.getHours())+":"+p(d.getMinutes());
+  }
+  var cancelDecisaoCtx = null; // contexto do modal de decisão aberto
+
+  // Recalcula antecedência/sugestão conforme o "horário considerado" escolhido
+  // (envio no app x aviso prévio declarado pelo aluno).
+  window.cancelRecalcDecisao = function(){
+    var ctx = cancelDecisaoCtx; if (!ctx) return;
+    var hcEl = document.getElementById("cxr-hc");
+    var origem = hcEl ? hcEl.value : "envio_portal";
+    var ref = (origem==="aviso_externo" && ctx.avisoEm) ? ctx.avisoEm : ctx.createdAt;
+    var horas = ctx.aula ? cancelAntecedenciaHoras(ctx.aula, new Date(ref || Date.now())) : 0;
+    var sug = cancelPercentualSugerido(ctx.faixas, horas);
+    ctx.sug = sug;
+    var infoEl = document.getElementById("cxr-info");
+    if (infoEl) infoEl.innerHTML = 'Antecedência considerada: <b>'+Math.round(horas)+'h</b> · Política sugere: <b>'+(sug==null?"—":sug+"%")+'</b>'+(ctx.valorRef!=null?(' · Valor da aula: '+cancelBRL(ctx.valorRef)):' · Mensalidade fixa (sem efeito financeiro)');
+    var pctEl = document.getElementById("cxr-pct");
+    if (pctEl && document.activeElement!==pctEl) pctEl.value = (sug!=null?sug:0);
+    cancelRecalcValorDecisao();
+  };
+  window.cancelRecalcValorDecisao = function(){
+    var ctx = cancelDecisaoCtx; var el = document.getElementById("cxr-valor"); if (!el) return;
+    var pct = Number((document.getElementById("cxr-pct")||{}).value||0);
+    el.value = (ctx && ctx.valorRef!=null) ? cancelBRL(pct*ctx.valorRef/100) : "—";
+  };
+
+  window.cancelAbrirDecisao = function(solicId){
+    var s = (state.solicitacoes||[]).filter(function(x){ return x.id===solicId; })[0];
+    if (!s) return;
+    var a = findAula(s.aulaId); var al = getAluno(s.alunoId);
+    var faixas = (cancelData.politica && cancelData.politica.ativo) ? cancelData.politica.faixas : null;
+    var porAula = al && al.plano && al.plano.cobranca === "por_aula";
+    var valorRef = porAula ? Number(al.plano.valorAula||0) : null;
+    cancelDecisaoCtx = { solicId:solicId, aula:a, avisoEm:s.avisoEm||null, createdAt:s.createdAt||null, faixas:faixas, valorRef:valorRef, sug:null };
+    var fechar = '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>';
+    // Quando o aluno declarou aviso prévio por outro meio, mostramos canal/momento
+    // e deixamos o personal ESCOLHER usar esse horário no cálculo (padrão), em vez
+    // do horário de envio no app — era isso que faltava aparecer.
+    var avisoLinha = s.avisoExterno
+      ? '<div class="cancel-info">Aviso prévio declarado pelo aluno: <b>'+esc(cancelCanalLabel(s.avisoCanal))+'</b>'+(s.avisoEm?(' em <b>'+cancelFmtDataHora(s.avisoEm)+'</b>'):'')+'</div>'
+      : '';
+    var hcCampo = s.avisoExterno
+      ? '<div class="field"><label>Horário considerado para a política</label><select id="cxr-hc" onchange="cancelRecalcDecisao()">'+
+          '<option value="aviso_externo">Aviso prévio ('+esc(cancelCanalLabel(s.avisoCanal))+(s.avisoEm?(' · '+cancelFmtDataHora(s.avisoEm)):'')+')</option>'+
+          '<option value="envio_portal">Envio do pedido no app ('+cancelFmtDataHora(s.createdAt)+')</option>'+
+        '</select></div>'
+      : '<input type="hidden" id="cxr-hc" value="envio_portal">';
+    document.getElementById("modal-cancel-body").innerHTML =
+      '<div class="modal-head"><div><div class="modal-title">Analisar cancelamento</div>'+
+      '<div class="modal-subtitle">'+esc(al?al.nome:"")+' · '+(a?fmtDataBR(a.data)+" · "+a.hora:"")+'</div></div>'+ fechar +'</div>'+
+      '<div class="solic-linha">Pedido enviado no app em '+cancelFmtDataHora(s.createdAt)+(s.mensagem?(' · "'+esc(s.mensagem)+'"'):'')+'</div>'+
+      avisoLinha + hcCampo +
+      '<div id="cxr-info" class="cancel-info"></div>'+
+      '<div class="field-row"><div class="field"><label>Percentual a cobrar</label><input id="cxr-pct" type="number" min="0" max="100" oninput="cancelRecalcValorDecisao()"></div>'+
+      '<div class="field"><label>Valor devido</label><input id="cxr-valor" type="text" disabled></div></div>'+
+      '<div class="field"><label>Justificativa (se diferente da política)</label><input id="cxr-just" type="text"></div>'+
+      '<div class="cancel-decisao-acoes"><button type="button" class="btn" onclick="cancelSubmitDecisao(\''+solicId+'\',false)">Recusar</button>'+
+      '<button type="button" class="btn primary" onclick="cancelSubmitDecisao(\''+solicId+'\',true)">Aprovar e cancelar</button></div>';
+    cancelRecalcDecisao();
+    abrirModal("modal-cancel");
+  };
+  window.cancelSubmitDecisao = function(solicId, aprovar){
+    if (!cancelFluxoAtivo()){ mostrarToast("Recurso ainda não ativado no servidor."); return; }
+    var just = (document.getElementById("cxr-just").value||"").trim();
+    var params = { p_solic_id: solicId, p_aprovar: aprovar, p_justificativa: just || null };
+    if (aprovar){
+      var pct = Number(document.getElementById("cxr-pct").value||0);
+      var sug = cancelDecisaoCtx ? cancelDecisaoCtx.sug : null;
+      if (sug!=null && pct!==sug && !just){ mostrarToast("Percentual diferente da política exige justificativa."); return; }
+      params.p_percentual = pct;
+      var hc = (document.getElementById("cxr-hc")||{}).value || "envio_portal";
+      params.p_horario_considerado_origem = hc;
+      if (hc==="aviso_externo" && cancelDecisaoCtx && cancelDecisaoCtx.avisoEm) params.p_aviso_em = cancelDecisaoCtx.avisoEm;
+    }
+    var s = (state.solicitacoes||[]).filter(function(x){ return x.id===solicId; })[0] || {};
+    enfileirar(function(){
+      return sb.rpc("decidir_solicitacao_cancelamento", params).then(function(r){
+        if (r.error) throw r.error;
+        var sx = findSolic(solicId); if (sx){ sx.status = aprovar ? "aprovada" : "negada"; if (just) sx.resposta = just; }
+        if (aprovar) return cancelReloadServidor(s.aulaId, s.alunoId);
+      });
+    }).then(function(){
+      invocarPush({ tipo:"solicitacao", solicitacao_id: solicId }); // notifica o aluno da decisão
+      cancelFecha(); renderCancelamentos(); renderAll(); mostrarToast(aprovar?"Cancelamento aprovado.":"Pedido recusado.");
+    }).catch(function(err){
+      console.error(err); mostrarToast("Não foi possível registrar a decisão.");
+    });
+  };
+
+  /* ---- Resolução de diferença (aula já paga) ---- */
+  window.cancelAbrirResolucao = function(cancelId){
+    document.getElementById("modal-cancel-body").innerHTML =
+      '<div class="modal-head"><div><div class="modal-title">Resolver diferença</div>'+
+      '<div class="modal-subtitle">Apenas registro — não movimenta dinheiro nem gera crédito automático.</div></div>'+
+      '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
+      '<div class="field"><label>Como foi resolvido</label><select id="cxrs-tipo"><option value="reembolso">Reembolso</option><option value="credito_futuro">Crédito futuro</option><option value="outro">Outro</option><option value="nenhuma">Nenhuma ação</option></select></div>'+
+      '<div class="field"><label>Observação</label><input id="cxrs-obs" type="text"></div>'+
+      '<button type="button" class="btn primary block" onclick="cancelSubmitResolucao(\''+cancelId+'\')">Salvar registro</button>';
+    abrirModal("modal-cancel");
+  };
+  window.cancelSubmitResolucao = function(cancelId){
+    if (cancelV2Disp !== true){ mostrarToast("Recurso ainda não ativado no servidor."); return; }
+    sb.rpc("registrar_resolucao_diferenca", {
+      p_cancelamento_id: cancelId,
+      p_tipo: document.getElementById("cxrs-tipo").value,
+      p_obs: (document.getElementById("cxrs-obs").value||"").trim() || null
+    }).then(function(r){
+      if (r.error){ console.error(r.error); mostrarToast("Não foi possível salvar a resolução."); return; }
+      cancelFecha(); renderCancelamentos(); mostrarToast("Resolução registrada.");
+    });
+  };
+
+  /* ---- Responder contestação ---- */
+  window.cancelAbrirRespContestacao = function(ctId){
+    document.getElementById("modal-cancel-body").innerHTML =
+      '<div class="modal-head"><div><div class="modal-title">Responder contestação</div></div>'+
+      '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
+      '<div class="field"><label>Resposta ao aluno</label><input id="cxc-resp" type="text"></div>'+
+      '<button type="button" class="btn primary block" onclick="cancelSubmitRespContestacao(\''+ctId+'\')">Enviar resposta</button>';
+    abrirModal("modal-cancel");
+  };
+  window.cancelSubmitRespContestacao = function(ctId){
+    if (cancelV2Disp !== true){ mostrarToast("Recurso ainda não ativado no servidor."); return; }
+    sb.rpc("responder_contestacao", { p_contestacao_id: ctId, p_resposta: (document.getElementById("cxc-resp").value||"").trim() }).then(function(r){
+      if (r.error){ console.error(r.error); mostrarToast("Não foi possível responder."); return; }
+      cancelFecha(); renderCancelamentos(); mostrarToast("Resposta enviada.");
+    });
+  };
 
   iniciar();
 

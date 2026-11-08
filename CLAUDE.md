@@ -5,8 +5,8 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 ## Arquitetura e arquivos principais
 
 - SPA em **JavaScript puro + Vite 5.4** (sem framework, sem TypeScript). `package.json` ainda com o nome antigo `trainer-flow`.
-- `index.html` — todas as telas (auth, alunos, agenda, financeiro) em um único arquivo.
-- `src/main.js` (~3781 linhas) — toda a lógica: init do Supabase, auth, sync, regras de negócio, render. Não há separação em módulos/componentes.
+- `index.html` — todas as telas (auth, alunos, agenda, financeiro) em um único arquivo, incluindo a sidebar desktop e o menu lateral retrátil mobile (`#nav-drawer`, botão hambúrguer no cabeçalho).
+- `src/main.js` (~4647 linhas) — toda a lógica: init do Supabase, auth, sync, regras de negócio, render. Não há separação em módulos/componentes.
 - `src/styles.css` — estilos.
 - `public/` — PWA: `manifest.webmanifest`, `sw.js` (service worker network-first, não cacheia respostas do Supabase).
 - `supabase/schema.sql` + `supabase/migrations/` — schema **versionado**, mas **incompleto frente ao banco real** (ver `../docs/ARQUITETURA-BANCO.md`): várias tabelas/RPCs em produção não têm `.sql` correspondente aqui.
@@ -16,6 +16,7 @@ Parte do ecossistema LT360. Ver [`../CLAUDE.md`](../CLAUDE.md) para arquitetura 
 ## Funcionalidades implementadas
 
 - Auth: login, cadastro, recuperação de senha.
+- Navegação: sidebar no desktop; **no mobile, menu lateral retrátil** (`#nav-drawer`) acionado por hambúrguer no cabeçalho, que substituiu a antiga barra inferior — abre da esquerda com backdrop, destaca a aba ativa (inclui o badge de Solicitações, sincronizado em `renderSolicitacoes`), traz logo/identificação/Sair, fecha por X/toque fora/Esc/seleção, com `aria-expanded`, focus-trap e scroll-lock; abrir/fechar em `abrirMenu()`/`fecharMenu()`. Desktop inalterado.
 - Alunos: CRUD, planos (mensal/semanal/avulsa), cobrança (fixa/por aula), recorrência de horários, foto. Exclusão definitiva (mesmo com histórico) via edge function `excluir-aluno` — ver "Cuidados específicos".
 - Agenda: criação/edição de aulas, detecção de conflito, disponibilidade e bloqueios do personal, remarcação (RPC `remarcar_aula`), check-in por QR (RPC `checkin_por_token`).
 - Financeiro: cobrança por período, controle de status de pagamento, recibo em PDF (`html2pdf.js`).
