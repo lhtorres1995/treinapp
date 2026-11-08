@@ -796,6 +796,9 @@ import './styles.css';
     document.getElementById("screen-"+nome).classList.add("active");
     document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===nome); });
     document.querySelectorAll(".nd-item").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===nome); });
+    document.querySelectorAll(".bn-btn").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===nome); });
+    var _mais = document.getElementById("bn-mais");
+    if (_mais){ _mais.classList.toggle("active", ["solicitacoes","perfil","disponibilidade","cancelamentos"].indexOf(nome)>=0); }
     document.getElementById("alunos-lista-view").hidden = false;
     document.getElementById("alunos-detalhe-view").hidden = true;
     fecharMenu();
@@ -4442,7 +4445,7 @@ import './styles.css';
     var contra = state.solicitacoes.filter(function(s){ return s.status==="contraproposta"; });
     var resp = state.solicitacoes.filter(function(s){ return s.status==="aprovada" || s.status==="negada"; });
     var nAgir = pend.length; // só as que pedem ação sua
-    ["solic-badge","nd-solic-badge"].forEach(function(bid){
+    ["solic-badge","nd-solic-badge","bn-solic-badge"].forEach(function(bid){
       var badge = document.getElementById(bid);
       if (badge){ if (nAgir){ badge.textContent = nAgir; badge.hidden = false; } else { badge.hidden = true; } }
     });

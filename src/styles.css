@@ -1187,3 +1187,65 @@
 .cancel-decisao-acoes{display:flex;gap:8px;margin-top:10px;}
 .cancel-decisao-acoes .btn{flex:1;justify-content:center;}
 .solic-aviso{color:var(--accent);font-size:12.5px;}
+
+/* =====================================================================
+   Barra de navegação inferior (mobile) — layout aprovado
+   Reutiliza irParaTab()/abrirMenu(); "Mais" abre o drawer existente.
+   Só aparece no celular; desktop/tablet seguem com sidebar/hambúrguer.
+   ===================================================================== */
+.bottomnav{ display:none; }
+@media (max-width: 760px){
+  .bottomnav{
+    position: fixed; left:0; right:0; bottom:0; z-index: 90;
+    display:flex; align-items:stretch; gap:2px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -3px 14px rgba(16,24,40,.07);
+    padding: 6px max(6px, env(safe-area-inset-left,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(6px, env(safe-area-inset-right,0px));
+  }
+  .bn-btn{
+    flex:1; min-width:0; position:relative;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    background:none; border:none; cursor:pointer;
+    color: var(--fg-muted); font-family: inherit; font-size:10.5px; font-weight:600;
+    padding:8px 2px 5px; border-radius:12px; min-height:48px; line-height:1.1;
+  }
+  .bn-btn svg{ width:23px; height:23px; flex:none; }
+  .bn-btn.active{ color: var(--accent); }
+  .bn-ind{ position:absolute; top:3px; left:50%; transform:translateX(-50%); width:22px; height:3px; border-radius:3px; background:transparent; transition: background .15s; }
+  .bn-btn.active .bn-ind{ background: var(--accent); }
+  .bn-btn:focus-visible{ outline:2px solid var(--accent); outline-offset:-3px; }
+  .bn-badge{
+    position:absolute; top:5px; right:calc(50% - 24px);
+    min-width:16px; height:16px; padding:0 4px;
+    background: var(--danger); color:#fff; border-radius:8px;
+    font-size:10px; font-weight:700; line-height:16px; text-align:center;
+  }
+  /* conteúdo não fica sob a barra; "Mais" substitui o hambúrguer */
+  main{ padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
+  .nd-burger{ display:none !important; }
+  .fab{ bottom: calc(84px + env(safe-area-inset-bottom,0px)) !important; }
+  .toast{ bottom: calc(92px + env(safe-area-inset-bottom,0px)); }
+
+  /* Resumo mais compacto no mobile (hero do próximo atendimento + KPIs) */
+  .dash-main{ gap:12px; }
+  .dash-hero{ padding:16px 16px; border-radius:16px; }
+  .dash-hero-top{ gap:8px; }
+  .dash-hero-time{ font-size:21px; white-space:nowrap; letter-spacing:-.01em; }
+  .dash-hero-badge{ flex:none; white-space:nowrap; align-self:flex-start; }
+  .dash-hero-aluno{ font-size:15px; margin-top:8px; }
+  .dash-hero-end{ margin-top:2px; }
+  .dash-hero-actions{ margin-top:12px; gap:6px; }
+  .hero-btn{ padding:7px 11px; }
+  .dash-stats{ gap:10px; }
+  .dash-stat{ padding:13px; border-radius:14px; gap:10px; }
+  .dash-stat-ic{ width:38px; height:38px; border-radius:11px; }
+  .dash-stat-ic svg{ width:18px; height:18px; }
+  .dash-stat-val{ font-size:17px; white-space:nowrap; }
+  .dash-stat-lab{ font-size:11px; }
+  .dash-block{ padding:15px; border-radius:16px; }
+  /* Resumo financeiro: gráfico um pouco mais baixo no mobile (só altura visual;
+     as barras — calculadas até 112px — continuam visíveis, legendas e valores
+     intactos; nenhuma mudança de cálculo/dado). */
+  .chart-fin{ height:118px; padding-top:4px; }
+}
