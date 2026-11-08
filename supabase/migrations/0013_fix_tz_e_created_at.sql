@@ -1,9 +1,9 @@
 -- ============================================================================
 -- LT360 — Correções de segurança/financeiro no fluxo de cancelamento (0010)
 --
--- ⚠️ STATUS: NÃO APLICADA. Aguardando autorização explícita do usuário.
---    Recomendado APLICAR ANTES de fazer merge dos PRs na main (a UI nova só vai
---    ao ar no merge). 0010 já está aplicada; esta migração a corrige para frente.
+-- ✅ STATUS: APLICADA em produção (trainer-flow) em 2026-11-08, com autorização
+--    explícita do usuário, via Supabase MCP apply_migration. 0010 já estava
+--    aplicada; esta corrige para frente. Não reaplicar.
 --
 -- Achados (revisão de segurança automática, MEDIUM):
 --  (1) Fuso horário: `(aula.data + aula.hora)::timestamptz` interpretava o
