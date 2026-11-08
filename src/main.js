@@ -561,6 +561,7 @@ import './styles.css';
       dataSugerida: r.data_sugerida, horaSugerida: (r.hora_sugerida||"").slice(0,5),
       contraData: r.contra_data, contraHora: (r.contra_hora||"").slice(0,5),
       mensagem: r.mensagem || "", status: r.status, resposta: r.resposta || "",
+      avisoExterno: !!r.aviso_externo, avisoCanal: r.aviso_canal || null, avisoEm: r.aviso_em || null,
       createdAt: r.created_at, respondidaEm: r.respondida_em
     };
   }
@@ -4407,13 +4408,19 @@ import './styles.css';
     var msg = s.mensagem ? '<div class="solic-linha solic-msg">"'+esc(s.mensagem)+'"</div>' : '';
     var sugerir = s.tipo==="remarcar"
       ? '<button class="btn sm" onclick="abrirSugerirHorario(\''+s.id+'\')">Sugerir horário</button>' : '';
+    var avisoTag = (s.tipo==="cancelar" && s.avisoExterno)
+      ? '<div class="solic-linha solic-aviso">Aluno declara aviso prévio por '+esc(cancelCanalLabel(s.avisoCanal))+(s.avisoEm?(' em '+cancelFmtDataHora(s.avisoEm)):'')+'</div>' : '';
+    // Fluxo novo de cancelamento: um único botão "Analisar" abre o modal de
+    // decisão (com política/percentual e opção de aprovar ou recusar).
+    var botoes = (s.tipo==="cancelar" && cancelFluxoAtivo())
+      ? (waAlunoBtn(s) + '<button class="btn primary sm" onclick="cancelAbrirDecisao(\''+s.id+'\')">Analisar</button>')
+      : (waAlunoBtn(s) +
+         '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+ sugerir +
+         '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>');
     return '<div class="solic-card-pro">'+
       '<div class="solic-card-top">'+tagTipo(s)+'<span class="solic-aluno">'+nomeAlunoSolic(s.alunoId)+'</span></div>'+
-      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ sugestao + msg +
-      '<div class="solic-botoes">'+ waAlunoBtn(s) +
-        '<button class="btn sm" onclick="recusarSolicitacao(\''+s.id+'\')">Recusar</button>'+ sugerir +
-        '<button class="btn primary sm" onclick="aceitarSolicitacao(\''+s.id+'\')">Aceitar</button>'+
-      '</div></div>';
+      '<div class="solic-linha">Aula: '+aulaLabel(findAula(s.aulaId))+'</div>'+ sugestao + avisoTag + msg +
+      '<div class="solic-botoes">'+ botoes +'</div></div>';
   }
   function cardSolicContraproposta(s){
     return '<div class="solic-card-pro">'+
@@ -4461,7 +4468,7 @@ import './styles.css';
   }
   window.recusarSolicitacao = function(id){
     var s = findSolic(id); if (!s) return;
-    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id, false); return; }
+    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id); return; }
     pedirConfirmacao("Recusar solicitação", "Recusar este pedido? O aluno verá como \"Negada\".", "Recusar", function(){
       atualizarStatusSolic(id, "negada").then(function(){ mostrarToast("Solicitação recusada."); }).catch(function(){});
     });
@@ -4470,7 +4477,7 @@ import './styles.css';
     var s = findSolic(id); if (!s) return;
     // Fluxo novo (quando ativo): decisão com percentual via RPC, sem usar o
     // cancelamento client-side antigo. Enquanto inativo, segue o fluxo atual.
-    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id, true); return; }
+    if (cancelFluxoAtivo() && s.tipo==="cancelar"){ cancelAbrirDecisao(id); return; }
     if (s.tipo==="cancelar"){
       pedirConfirmacao("Aceitar cancelamento", "A aula será cancelada e o pedido marcado como aprovado. Continuar?", "Aceitar e cancelar", function(){
         if (findAula(s.aulaId)) cancelarAula(s.aulaId);   // aplica o cancelamento na agenda
@@ -4666,9 +4673,8 @@ import './styles.css';
     var linhas = pend.length ? pend.map(function(s){
       var a = findAula(s.aulaId); var al = getAluno(s.alunoId);
       return '<div class="cancel-item">'+
-        '<div><b>'+esc(al?al.nome:"(aluno)")+'</b><div class="card-sub">'+(a?fmtDataBR(a.data)+" · "+a.hora:"(aula)")+(s.avisoExterno?" · avisou por "+esc(s.avisoCanal||"outro meio"):"")+'</div></div>'+
-        '<div class="action-row"><button class="btn sm" onclick="cancelAbrirDecisao(\''+s.id+'\',false)">Recusar</button>'+
-        '<button class="btn primary sm" onclick="cancelAbrirDecisao(\''+s.id+'\',true)">Aprovar</button></div></div>';
+        '<div><b>'+esc(al?al.nome:"(aluno)")+'</b><div class="card-sub">'+(a?fmtDataBR(a.data)+" · "+a.hora:"(aula)")+(s.avisoExterno?" · avisou por "+esc(cancelCanalLabel(s.avisoCanal)):"")+'</div></div>'+
+        '<div class="action-row"><button class="btn primary sm" onclick="cancelAbrirDecisao(\''+s.id+'\')">Analisar</button></div></div>';
     }).join("") : '<div class="hint">Nenhum pedido de cancelamento em análise.</div>';
     return '<div class="card cancel-card"><div class="card-title">Pedidos de cancelamento</div>'+linhas+'</div>';
   }
@@ -4882,64 +4888,104 @@ import './styles.css';
         return cancelReloadServidor(aulaId, alunoId);
       });
     }).then(function(){
+      invocarPush({ tipo:"aula_cancelada", aula_id: aulaId }); // dá ciência ao aluno
       cancelFecha(); renderCancelamentos(); renderAll(); mostrarToast("Cancelamento registrado.");
     }).catch(function(err){
       console.error(err); mostrarToast("Não foi possível registrar o cancelamento.");
     });
   };
 
-  /* ---- Decisão de um pedido do aluno (aprovar/recusar) ---- */
-  window.cancelAbrirDecisao = function(solicId, aprovar){
+  /* ---- Decisão de um pedido do aluno (Analisar → aprovar/recusar) ---- */
+  function cancelCanalLabel(c){
+    var m = { whatsapp:"WhatsApp", telefone:"Telefone", presencial:"Presencial", portal:"Portal", personal:"Iniciativa do personal" };
+    return m[c] || c || "outro meio";
+  }
+  function cancelFmtDataHora(iso){
+    if (!iso) return "—"; var d = new Date(iso); if (isNaN(d)) return "—";
+    function p(n){ return ("0"+n).slice(-2); }
+    return p(d.getDate())+"/"+p(d.getMonth()+1)+"/"+d.getFullYear()+" "+p(d.getHours())+":"+p(d.getMinutes());
+  }
+  var cancelDecisaoCtx = null; // contexto do modal de decisão aberto
+
+  // Recalcula antecedência/sugestão conforme o "horário considerado" escolhido
+  // (envio no app x aviso prévio declarado pelo aluno).
+  window.cancelRecalcDecisao = function(){
+    var ctx = cancelDecisaoCtx; if (!ctx) return;
+    var hcEl = document.getElementById("cxr-hc");
+    var origem = hcEl ? hcEl.value : "envio_portal";
+    var ref = (origem==="aviso_externo" && ctx.avisoEm) ? ctx.avisoEm : ctx.createdAt;
+    var horas = ctx.aula ? cancelAntecedenciaHoras(ctx.aula, new Date(ref || Date.now())) : 0;
+    var sug = cancelPercentualSugerido(ctx.faixas, horas);
+    ctx.sug = sug;
+    var infoEl = document.getElementById("cxr-info");
+    if (infoEl) infoEl.innerHTML = 'Antecedência considerada: <b>'+Math.round(horas)+'h</b> · Política sugere: <b>'+(sug==null?"—":sug+"%")+'</b>'+(ctx.valorRef!=null?(' · Valor da aula: '+cancelBRL(ctx.valorRef)):' · Mensalidade fixa (sem efeito financeiro)');
+    var pctEl = document.getElementById("cxr-pct");
+    if (pctEl && document.activeElement!==pctEl) pctEl.value = (sug!=null?sug:0);
+    cancelRecalcValorDecisao();
+  };
+  window.cancelRecalcValorDecisao = function(){
+    var ctx = cancelDecisaoCtx; var el = document.getElementById("cxr-valor"); if (!el) return;
+    var pct = Number((document.getElementById("cxr-pct")||{}).value||0);
+    el.value = (ctx && ctx.valorRef!=null) ? cancelBRL(pct*ctx.valorRef/100) : "—";
+  };
+
+  window.cancelAbrirDecisao = function(solicId){
     var s = (state.solicitacoes||[]).filter(function(x){ return x.id===solicId; })[0];
     if (!s) return;
     var a = findAula(s.aulaId); var al = getAluno(s.alunoId);
     var faixas = (cancelData.politica && cancelData.politica.ativo) ? cancelData.politica.faixas : null;
-    var horas = a ? cancelAntecedenciaHoras(a, new Date(s.createdAt || Date.now())) : 0;
-    var sug = cancelPercentualSugerido(faixas, horas);
     var porAula = al && al.plano && al.plano.cobranca === "por_aula";
     var valorRef = porAula ? Number(al.plano.valorAula||0) : null;
-    if (!aprovar){
-      document.getElementById("modal-cancel-body").innerHTML =
-        '<div class="modal-head"><div><div class="modal-title">Recusar pedido</div>'+
-        '<div class="modal-subtitle">'+esc(al?al.nome:"")+'</div></div>'+
-        '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
-        '<div class="field"><label>Justificativa para o aluno</label><input id="cxr-just" type="text"></div>'+
-        '<button type="button" class="btn primary block" onclick="cancelSubmitDecisao(\''+solicId+'\',false,null)">Recusar pedido</button>';
-      abrirModal("modal-cancel"); return;
-    }
+    cancelDecisaoCtx = { solicId:solicId, aula:a, avisoEm:s.avisoEm||null, createdAt:s.createdAt||null, faixas:faixas, valorRef:valorRef, sug:null };
+    var fechar = '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>';
+    // Quando o aluno declarou aviso prévio por outro meio, mostramos canal/momento
+    // e deixamos o personal ESCOLHER usar esse horário no cálculo (padrão), em vez
+    // do horário de envio no app — era isso que faltava aparecer.
+    var avisoLinha = s.avisoExterno
+      ? '<div class="cancel-info">Aviso prévio declarado pelo aluno: <b>'+esc(cancelCanalLabel(s.avisoCanal))+'</b>'+(s.avisoEm?(' em <b>'+cancelFmtDataHora(s.avisoEm)+'</b>'):'')+'</div>'
+      : '';
+    var hcCampo = s.avisoExterno
+      ? '<div class="field"><label>Horário considerado para a política</label><select id="cxr-hc" onchange="cancelRecalcDecisao()">'+
+          '<option value="aviso_externo">Aviso prévio ('+esc(cancelCanalLabel(s.avisoCanal))+(s.avisoEm?(' · '+cancelFmtDataHora(s.avisoEm)):'')+')</option>'+
+          '<option value="envio_portal">Envio do pedido no app ('+cancelFmtDataHora(s.createdAt)+')</option>'+
+        '</select></div>'
+      : '<input type="hidden" id="cxr-hc" value="envio_portal">';
     document.getElementById("modal-cancel-body").innerHTML =
-      '<div class="modal-head"><div><div class="modal-title">Aprovar cancelamento</div>'+
-      '<div class="modal-subtitle">'+esc(al?al.nome:"")+' · '+(a?fmtDataBR(a.data)+" · "+a.hora:"")+'</div></div>'+
-      '<button type="button" class="modal-close" onclick="cancelFecha()" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>'+
-      '<div class="cancel-info">Antecedência do pedido: <b>'+Math.round(horas)+'h</b> · Sugerido: <b>'+(sug==null?"—":sug+"%")+'</b>'+(porAula?(' · Aula: '+cancelBRL(valorRef)):' · Mensalidade fixa (sem efeito)')+'</div>'+
-      '<div class="field-row"><div class="field"><label>Percentual</label><input id="cxr-pct" type="number" min="0" max="100" value="'+(sug!=null?sug:0)+'"></div>'+
-      '<div class="field"><label>Horário considerado</label><select id="cxr-hc"><option value="envio_portal">Envio do pedido</option><option value="aviso_externo">Aviso externo declarado</option></select></div></div>'+
+      '<div class="modal-head"><div><div class="modal-title">Analisar cancelamento</div>'+
+      '<div class="modal-subtitle">'+esc(al?al.nome:"")+' · '+(a?fmtDataBR(a.data)+" · "+a.hora:"")+'</div></div>'+ fechar +'</div>'+
+      '<div class="solic-linha">Pedido enviado no app em '+cancelFmtDataHora(s.createdAt)+(s.mensagem?(' · "'+esc(s.mensagem)+'"'):'')+'</div>'+
+      avisoLinha + hcCampo +
+      '<div id="cxr-info" class="cancel-info"></div>'+
+      '<div class="field-row"><div class="field"><label>Percentual a cobrar</label><input id="cxr-pct" type="number" min="0" max="100" oninput="cancelRecalcValorDecisao()"></div>'+
+      '<div class="field"><label>Valor devido</label><input id="cxr-valor" type="text" disabled></div></div>'+
       '<div class="field"><label>Justificativa (se diferente da política)</label><input id="cxr-just" type="text"></div>'+
-      '<button type="button" class="btn primary block" onclick="cancelSubmitDecisao(\''+solicId+'\',true,'+(sug==null?'null':sug)+')">Aprovar e cancelar</button>';
+      '<div class="cancel-decisao-acoes"><button type="button" class="btn" onclick="cancelSubmitDecisao(\''+solicId+'\',false)">Recusar</button>'+
+      '<button type="button" class="btn primary" onclick="cancelSubmitDecisao(\''+solicId+'\',true)">Aprovar e cancelar</button></div>';
+    cancelRecalcDecisao();
     abrirModal("modal-cancel");
   };
-  window.cancelSubmitDecisao = function(solicId, aprovar, sug){
+  window.cancelSubmitDecisao = function(solicId, aprovar){
     if (!cancelFluxoAtivo()){ mostrarToast("Recurso ainda não ativado no servidor."); return; }
     var just = (document.getElementById("cxr-just").value||"").trim();
     var params = { p_solic_id: solicId, p_aprovar: aprovar, p_justificativa: just || null };
     if (aprovar){
       var pct = Number(document.getElementById("cxr-pct").value||0);
+      var sug = cancelDecisaoCtx ? cancelDecisaoCtx.sug : null;
       if (sug!=null && pct!==sug && !just){ mostrarToast("Percentual diferente da política exige justificativa."); return; }
       params.p_percentual = pct;
-      params.p_horario_considerado_origem = document.getElementById("cxr-hc").value;
+      var hc = (document.getElementById("cxr-hc")||{}).value || "envio_portal";
+      params.p_horario_considerado_origem = hc;
+      if (hc==="aviso_externo" && cancelDecisaoCtx && cancelDecisaoCtx.avisoEm) params.p_aviso_em = cancelDecisaoCtx.avisoEm;
     }
     var s = (state.solicitacoes||[]).filter(function(x){ return x.id===solicId; })[0] || {};
     enfileirar(function(){
       return sb.rpc("decidir_solicitacao_cancelamento", params).then(function(r){
         if (r.error) throw r.error;
-        // A solicitação é gerida fora do ultimoSnapshot (sincronização própria);
-        // atualiza só o estado local para refletir a decisão de imediato.
         var sx = findSolic(solicId); if (sx){ sx.status = aprovar ? "aprovada" : "negada"; if (just) sx.resposta = just; }
-        // No aprovar, a aula foi cancelada e o financeiro mudou no servidor:
-        // recarrega aula + pagamentos (fonte de verdade) e alinha o snapshot.
         if (aprovar) return cancelReloadServidor(s.aulaId, s.alunoId);
       });
     }).then(function(){
+      invocarPush({ tipo:"solicitacao", solicitacao_id: solicId }); // notifica o aluno da decisão
       cancelFecha(); renderCancelamentos(); renderAll(); mostrarToast(aprovar?"Cancelamento aprovado.":"Pedido recusado.");
     }).catch(function(err){
       console.error(err); mostrarToast("Não foi possível registrar a decisão.");

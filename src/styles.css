@@ -1182,3 +1182,8 @@
 .cancel-preview-ok{color:var(--fg-muted);font-size:12.5px;margin-bottom:4px;}
 .cancel-preview-err{color:var(--danger,#c0392b);font-size:12.5px;}
 .btn.xs{padding:3px 8px;font-size:12px;border-radius:7px;}
+
+/* Decisão de cancelamento: ações lado a lado + aviso no card */
+.cancel-decisao-acoes{display:flex;gap:8px;margin-top:10px;}
+.cancel-decisao-acoes .btn{flex:1;justify-content:center;}
+.solic-aviso{color:var(--accent);font-size:12.5px;}
