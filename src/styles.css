@@ -980,7 +980,7 @@
     .nd-burger { display:inline-flex; }
     .app-main-col { order:1; }
     main { padding: 6px 14px calc(16px + env(safe-area-inset-bottom, 0px)); }
-    .app-header { padding: 14px 14px 2px; flex-wrap:wrap; }
+    .app-header { padding: calc(env(safe-area-inset-top, 0px) + 12px) max(14px, env(safe-area-inset-right,0px)) 2px max(14px, env(safe-area-inset-left,0px)); flex-wrap:wrap; }
     .app-title { font-size:19px; }
     .header-profile { display:none; }
     .header-refresh { display:inline-flex; }
@@ -1196,7 +1196,7 @@
 .bottomnav{ display:none; }
 @media (max-width: 760px){
   .bottomnav{
-    position: fixed; left:0; right:0; bottom:0; z-index: 90;
+    position: fixed; left:0; right:0; bottom:0; z-index: 40;
     display:flex; align-items:stretch; gap:2px;
     background: var(--surface);
     border-top: 1px solid var(--border);
@@ -1223,6 +1223,9 @@
   }
   /* conteúdo não fica sob a barra; "Mais" substitui o hambúrguer */
   main{ padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
+  /* Enquanto o drawer está aberto, esconde a barra (evita vazar pelo backdrop).
+     Modais (overlay z-50) já ficam acima da barra (z-40), sem sobreposição. */
+  body.nd-lock .bottomnav{ display:none; }
   .nd-burger{ display:none !important; }
   .fab{ bottom: calc(84px + env(safe-area-inset-bottom,0px)) !important; }
   .toast{ bottom: calc(92px + env(safe-area-inset-bottom,0px)); }
