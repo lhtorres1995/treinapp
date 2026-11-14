@@ -733,7 +733,9 @@ import './styles.css';
     }
     document.getElementById("gate").hidden = true;
     document.getElementById("header-date").textContent = capitalizar(diaSemanaLabel(fmtData(hoje))) + ", " + fmtDataBR(fmtData(hoje));
-    sincronizarCobrancasAutomaticas();
+    // A sincronização de cobranças é "best effort": uma falha nela nunca pode
+    // impedir a renderização do app (senão a tela inicial fica no esqueleto).
+    try { sincronizarCobrancasAutomaticas(); } catch(err){ console.error("Falha ao sincronizar cobranças:", err); }
     renderAll();
   }
 
@@ -1523,13 +1525,17 @@ import './styles.css';
     }
     return calcularVencimentoPeriodo(periodo.fim, dias);
   }
-  // Nº de aulas AGENDADAS (não canceladas/remarcadas) do aluno dentro de um
-  // período — base do modo antecipado "por aulas agendadas no mês".
-  function contarAulasAgendadasNoPeriodo(aluno, periodo){
+  // Aulas AGENDADAS (não canceladas/remarcadas) do aluno dentro de um período,
+  // ordenadas por data/hora — base do modo antecipado "por aulas agendadas no
+  // mês" (nº e datas que compõem a cobrança).
+  function aulasAgendadasNoPeriodo(aluno, periodo){
     return state.aulas.filter(function(c){
       return c.alunoId===aluno.id && c.data>=periodo.inicio && c.data<=periodo.fim &&
         c.status!=="cancelada" && c.status!=="remarcada";
-    }).length;
+    }).sort(function(a,b){ return (a.data+a.hora) < (b.data+b.hora) ? -1 : 1; });
+  }
+  function contarAulasAgendadasNoPeriodo(aluno, periodo){
+    return aulasAgendadasNoPeriodo(aluno, periodo).length;
   }
   function buscarPagamentoPorChave(alunoId, chaveReferencia){
     var achado = null;
@@ -1619,9 +1625,12 @@ import './styles.css';
     } else if (aluno.plano.cobranca === "agendadas"){
       // Antecipado: cobra no início do período pelas aulas AGENDADAS no mês.
       // Não marca as aulas como faturadas — enquanto o lançamento estiver
-      // pendente, o valor é reconciliado conforme a agenda muda
-      // (ver sincronizarCobrancasAutomaticas). Quando pago, congela.
-      valor = contarAulasAgendadasNoPeriodo(aluno, periodo) * aluno.plano.valorAula;
+      // pendente, o valor (e a lista de datas) é reconciliado conforme a agenda
+      // muda (ver sincronizarCobrancasAutomaticas). Quando pago, congela.
+      // Guarda os ids das aulas agendadas para o recibo discriminar as datas.
+      var agendadas = aulasAgendadasNoPeriodo(aluno, periodo);
+      valor = agendadas.length * aluno.plano.valorAula;
+      aulaIds = agendadas.map(function(c){ return c.id; });
     } else {
       state.aulas.forEach(function(c){
         if (c.alunoId===aluno.id && c.status==="concluida" && !c.faturada &&
@@ -1646,12 +1655,17 @@ import './styles.css';
   // de período padrão (ex.: ajustes avulsos).
   function intervaloDaChave(chave){
     if (!chave) return null;
-    if (chave.indexOf("mes-")===0){
-      var pm = periodoDoCiclo("mensal", chave.slice(4)+"-01");
+    // Extrai só a parte de data da chave, ignorando sufixos (ex.: chaves de
+    // ajuste "mes-2026-10-ajuste-<id>"). Sem isso, um Date inválido quebraria
+    // periodoDoCiclo/fmtData com RangeError.
+    var m = /^mes-(\d{4}-\d{2})/.exec(chave);
+    if (m){
+      var pm = periodoDoCiclo("mensal", m[1]+"-01");
       return { inicio: pm.inicio, fim: pm.fim };
     }
-    if (chave.indexOf("semana-")===0){
-      var ps = periodoDoCiclo("semanal", chave.slice(7));
+    var s = /^semana-(\d{4}-\d{2}-\d{2})/.exec(chave);
+    if (s){
+      var ps = periodoDoCiclo("semanal", s[1]);
       return { inicio: ps.inicio, fim: ps.fim };
     }
     return null;
@@ -1792,9 +1806,15 @@ import './styles.css';
             criouAlgo = true;
           }
           if (aluno.plano.cobranca === "agendadas"){
-            var valorAgendadas = contarAulasAgendadasNoPeriodo(aluno, periodo) * aluno.plano.valorAula;
+            var ags = aulasAgendadasNoPeriodo(aluno, periodo);
+            var valorAgendadas = ags.length * aluno.plano.valorAula;
             if (existente.valor !== valorAgendadas){
               existente.valor = valorAgendadas;
+              criouAlgo = true;
+            }
+            var idsAg = ags.map(function(c){ return c.id; });
+            if ((existente.aulaIds||[]).join(",") !== idsAg.join(",")){
+              existente.aulaIds = idsAg;
               criouAlgo = true;
             }
           }
@@ -2328,7 +2348,7 @@ import './styles.css';
 
     var itensHtml = "";
     if (aulasDoRecibo.length){
-      var valorUnit = aluno.plano.cobranca === "por_aula" ? aluno.plano.valorAula : null;
+      var valorUnit = (aluno.plano.cobranca === "por_aula" || aluno.plano.cobranca === "agendadas") ? aluno.plano.valorAula : null;
       aulasDoRecibo.forEach(function(c){
         var d = new Date(c.data+"T00:00:00");
         var diaSemana = capitalizar(nomesDias()[d.getDay()]);
