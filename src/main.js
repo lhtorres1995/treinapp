@@ -829,8 +829,20 @@ import './styles.css';
     campoCobranca.hidden = false;
     var cobranca = document.getElementById("f-plano-cobranca").value;
     campoFixo.hidden = cobranca !== "fixa";
-    campoAula.hidden = cobranca !== "por_aula";
+    // "por_aula" e "agendadas" usam o valor por aula.
+    campoAula.hidden = !(cobranca === "por_aula" || cobranca === "agendadas");
     campoVencimento.hidden = false;
+    // No modo antecipado os dias de vencimento são contados a partir do
+    // INÍCIO do período; nos demais, a partir do fim.
+    var labelVenc = document.getElementById("label-dias-vencimento");
+    var hintVenc = document.getElementById("hint-dias-vencimento");
+    if (cobranca === "agendadas"){
+      labelVenc.textContent = "Vencimento (dias a partir do início do período)";
+      hintVenc.textContent = "A cobrança é lançada no início do mês/semana pelas aulas agendadas no período; isso define quantos dias depois do início do período ela vence. Ex: mensal com 5 = vence no dia 5 do próprio mês.";
+    } else {
+      labelVenc.textContent = "Vencimento (dias após o fim do período)";
+      hintVenc.textContent = "A cobrança do mês/semana é lançada automaticamente; isso só define quantos dias depois do fim do período ela vence. Ex: mensal com 5 = vence no dia 5 do mês seguinte.";
+    }
     if (!inputVencimento.value){
       inputVencimento.value = tipo === "semanal" ? 2 : 5;
     }
@@ -937,6 +949,23 @@ import './styles.css';
 
     var editando = !!editingAlunoId;
 
+    // Pedido: ao trocar a forma de pagamento de um aluno já existente, as
+    // cobranças em aberto (e as futuras) devem ser recalculadas pelo novo
+    // plano — mas só depois de um alerta de confirmação. Detecta aqui se o
+    // plano mudou e se há cobranças pendentes a recalcular (as pagas nunca
+    // mudam). O plano atual do aluno ainda é o ANTIGO neste ponto (o novo só
+    // é aplicado em concluirSalvarAluno).
+    var vaiRecalcular = false, qtdPendentes = 0;
+    if (editando){
+      var planoAntigo = getAluno(editingAlunoId).plano;
+      if (planoMudou(planoAntigo, dados.plano)){
+        qtdPendentes = state.pagamentos.filter(function(p){
+          return p.alunoId===editingAlunoId && p.status==="pendente";
+        }).length;
+        vaiRecalcular = qtdPendentes > 0;
+      }
+    }
+
     // Requisito do usuário: avisar (sem bloquear) quando os novos horários de
     // recorrência colidirem com os de outro aluno ATIVO, acima da capacidade
     // simultânea configurada no perfil — mesma lógica usada em salvarAula.
@@ -949,6 +978,21 @@ import './styles.css';
     // recorrência), não no momento de definir o padrão.
     var foraDaDisponibilidade = detectarForaDaDisponibilidade(horariosRecorrencia);
 
+    // Efetiva o salvamento, passando antes (se preciso) pela confirmação de
+    // recálculo das cobranças em aberto.
+    function finalizarSalvamento(){
+      if (vaiRecalcular){
+        pedirConfirmacao(
+          "Recalcular cobranças em aberto",
+          "Você alterou a forma de pagamento deste aluno. Isso vai recalcular "+qtdPendentes+" cobrança(s) em aberto conforme o novo plano. Cobranças já pagas não são alteradas. Deseja continuar?",
+          "Recalcular e salvar",
+          function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando, true); }
+        );
+      } else {
+        concluirSalvarAluno(dados, horariosRecorrencia, editando, false);
+      }
+    }
+
     if (conflitos.length > 0 || foraDaDisponibilidade.length > 0){
       var partes = [];
       if (conflitos.length > 0) partes.push(montarMensagemConflitoRecorrencia(conflitos));
@@ -957,12 +1001,22 @@ import './styles.css';
         "Atenção aos horários",
         partes.join(" "),
         "Salvar mesmo assim",
-        function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando); }
+        finalizarSalvamento
       );
       return;
     }
-    concluirSalvarAluno(dados, horariosRecorrencia, editando);
+    finalizarSalvamento();
   };
+
+  // Compara os campos do plano que afetam a geração de cobranças. Mudou
+  // qualquer um deles => cobranças em aberto precisam ser recalculadas.
+  function planoMudou(a, b){
+    if (!a || !b) return false;
+    return a.tipo !== b.tipo || a.cobranca !== b.cobranca ||
+      (Number(a.valorFixo)||0) !== (Number(b.valorFixo)||0) ||
+      (Number(a.valorAula)||0) !== (Number(b.valorAula)||0) ||
+      (a.diasVencimento===0||a.diasVencimento?Number(a.diasVencimento):null) !== (b.diasVencimento===0||b.diasVencimento?Number(b.diasVencimento):null);
+  }
 
   // Para cada dia+hora da recorrência que está sendo salva, conta quantos
   // OUTROS alunos ativos (excluindo o próprio aluno em edição) já ocupam o
@@ -1021,7 +1075,7 @@ import './styles.css';
     return "Está(ão) fora da sua disponibilidade configurada: " + linhas.join(", ") + ".";
   }
 
-  function concluirSalvarAluno(dados, horariosRecorrencia, editando){
+  function concluirSalvarAluno(dados, horariosRecorrencia, editando, recalcular){
     var alunoId;
     if (editando){
       var alunoExistente = getAluno(editingAlunoId);
@@ -1034,12 +1088,19 @@ import './styles.css';
       alunoId = dados.id;
     }
 
-    salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando);
+    salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular);
   }
 
-  async function salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando){
+  async function salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular){
     var idsParaRemover = editando ? limparAulasRecorrenciaFutura(alunoId) : [];
     var geradas = Object.keys(horariosRecorrencia).length > 0 ? gerarAulasAPartirDaRecorrencia(alunoId) : [];
+
+    // Recalcula as cobranças em aberto DEPOIS de atualizar a agenda recorrente,
+    // para que o modo antecipado (por aulas agendadas) e o por-aula reflitam a
+    // nova grade do aluno. Só roda quando o usuário confirmou a troca de plano.
+    if (recalcular){
+      recalcularCobrancasAbertasDoAluno(getAluno(alunoId));
+    }
 
     var resultado = await salvarEstado();   // aguarda para relatar a contagem real
     fecharModal("modal-aluno");
@@ -1428,6 +1489,25 @@ import './styles.css';
   function calcularVencimentoPeriodo(fimPeriodo, diasVencimento){
     return addDias(fimPeriodo, (diasVencimento===0||diasVencimento) ? diasVencimento : 5);
   }
+  // Vencimento de um lançamento de período conforme o modo de cobrança do
+  // aluno. No modo "agendadas" (antecipado), os dias de vencimento são
+  // contados a partir do INÍCIO do período (o aluno paga no começo do mês);
+  // nos demais modos, a partir do fim do período (comportamento original).
+  function vencimentoDoPeriodo(aluno, periodo){
+    var dias = aluno.plano.diasVencimento;
+    if (aluno.plano.cobranca === "agendadas"){
+      return addDias(periodo.inicio, (dias===0||dias) ? dias : 5);
+    }
+    return calcularVencimentoPeriodo(periodo.fim, dias);
+  }
+  // Nº de aulas AGENDADAS (não canceladas/remarcadas) do aluno dentro de um
+  // período — base do modo antecipado "por aulas agendadas no mês".
+  function contarAulasAgendadasNoPeriodo(aluno, periodo){
+    return state.aulas.filter(function(c){
+      return c.alunoId===aluno.id && c.data>=periodo.inicio && c.data<=periodo.fim &&
+        c.status!=="cancelada" && c.status!=="remarcada";
+    }).length;
+  }
   function buscarPagamentoPorChave(alunoId, chaveReferencia){
     var achado = null;
     state.pagamentos.forEach(function(p){ if (p.alunoId===alunoId && p.chaveReferencia===chaveReferencia) achado = p; });
@@ -1513,6 +1593,12 @@ import './styles.css';
     var valor = 0, aulaIds = [];
     if (aluno.plano.cobranca === "fixa"){
       valor = aluno.plano.valorFixo;
+    } else if (aluno.plano.cobranca === "agendadas"){
+      // Antecipado: cobra no início do período pelas aulas AGENDADAS no mês.
+      // Não marca as aulas como faturadas — enquanto o lançamento estiver
+      // pendente, o valor é reconciliado conforme a agenda muda
+      // (ver sincronizarCobrancasAutomaticas). Quando pago, congela.
+      valor = contarAulasAgendadasNoPeriodo(aluno, periodo) * aluno.plano.valorAula;
     } else {
       state.aulas.forEach(function(c){
         if (c.alunoId===aluno.id && c.status==="concluida" && !c.faturada &&
@@ -1527,9 +1613,110 @@ import './styles.css';
     state.pagamentos.push({
       id: uid(), alunoId: aluno.id, valor: valor, referencia: periodo.labelPeriodo,
       status: "pendente", chaveReferencia: periodo.chaveReferencia, mesReferencia: periodo.mesReferencia,
-      dataVencimento: calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento),
+      dataVencimento: vencimentoDoPeriodo(aluno, periodo),
       aulaIds: aulaIds
     });
+  }
+
+  // Intervalo [inicio,fim] coberto por uma chave de referência padrão
+  // ("mes-YYYY-MM" ou "semana-YYYY-MM-DD"); null para chaves que não sejam
+  // de período padrão (ex.: ajustes avulsos).
+  function intervaloDaChave(chave){
+    if (!chave) return null;
+    if (chave.indexOf("mes-")===0){
+      var pm = periodoDoCiclo("mensal", chave.slice(4)+"-01");
+      return { inicio: pm.inicio, fim: pm.fim };
+    }
+    if (chave.indexOf("semana-")===0){
+      var ps = periodoDoCiclo("semanal", chave.slice(7));
+      return { inicio: ps.inicio, fim: ps.fim };
+    }
+    return null;
+  }
+
+  // Intervalos de datas já LIQUIDADOS (cobranças pagas) de um aluno — por
+  // período padrão quando a chave permite, senão pelas datas das aulas
+  // vinculadas (caso avulsa/ajuste). Usado para nunca recriar/recobrar um
+  // período que se sobreponha a algo já pago.
+  function intervalosPagosDoAluno(aluno){
+    var ints = [];
+    state.pagamentos.forEach(function(p){
+      if (p.alunoId!==aluno.id || p.status!=="pago") return;
+      var r = intervaloDaChave(p.chaveReferencia);
+      if (r){ ints.push(r); return; }
+      (p.aulaIds||[]).forEach(function(aid){
+        var a = null;
+        state.aulas.forEach(function(c){ if (c.id===aid) a = c; });
+        if (a) ints.push({ inicio: a.data, fim: a.data });
+      });
+    });
+    return ints;
+  }
+
+  function periodoTemPagamentoLiquidado(periodo, intervalosPagos){
+    return intervalosPagos.some(function(r){
+      return periodo.inicio <= r.fim && r.inicio <= periodo.fim; // sobreposição
+    });
+  }
+
+  // Pedido: ao trocar a forma de pagamento de um aluno, recalcular as
+  // cobranças EM ABERTO (e as que virão) conforme o novo plano, sem jamais
+  // tocar no que já foi pago. Remove as cobranças pendentes do aluno,
+  // "desfatura" apenas as aulas ligadas a elas (as de cobranças pagas ficam
+  // intactas) e regenera tudo sob o novo plano.
+  function recalcularCobrancasAbertasDoAluno(aluno){
+    var pendentes = state.pagamentos.filter(function(p){ return p.alunoId===aluno.id && p.status==="pendente"; });
+    var liberarAula = {};
+    pendentes.forEach(function(p){ (p.aulaIds||[]).forEach(function(aid){ liberarAula[aid] = true; }); });
+    state.aulas.forEach(function(c){
+      if (c.alunoId===aluno.id && liberarAula[c.id] && c.faturada){
+        c.faturada = false; c.valorFaturado = null;
+      }
+    });
+    var idsPend = {};
+    pendentes.forEach(function(p){ idsPend[p.id] = true; });
+    state.pagamentos = state.pagamentos.filter(function(p){ return !idsPend[p.id]; });
+    regenerarCobrancasDoAluno(aluno);
+  }
+
+  // Regenera as cobranças pendentes de um aluno sob o plano atual, preservando
+  // qualquer período já pago (nunca recriado — ver periodoTemPagamentoLiquidado).
+  function regenerarCobrancasDoAluno(aluno){
+    if (aluno.plano.tipo === "avulsa"){
+      // avulsa: cada aula concluída ainda não faturada vira sua própria
+      // cobrança (mesma regra do fluxo de conclusão de aula).
+      state.aulas.forEach(function(c){
+        if (c.alunoId===aluno.id && c.status==="concluida" && !c.faturada){
+          c.faturada = true; c.valorFaturado = aluno.plano.valorAula;
+          state.pagamentos.push({
+            id: uid(), alunoId: aluno.id, valor: aluno.plano.valorAula,
+            referencia: "Aula de "+fmtDataBR(c.data), status: "pendente",
+            mesReferencia: c.data.slice(0,7), dataVencimento: c.data, aulaIds: [c.id]
+          });
+        }
+      });
+      return;
+    }
+    var tipo = aluno.plano.tipo;
+    var hojeStr = fmtData(hoje);
+    var intervalosPagos = intervalosPagosDoAluno(aluno);
+    var pagamentosPorChave = {};
+    state.pagamentos.forEach(function(p){
+      if (p.alunoId===aluno.id && p.chaveReferencia) pagamentosPorChave[p.chaveReferencia] = true;
+    });
+    var periodoAtual = periodoDoCiclo(tipo, hojeStr);
+    var cursor = (aluno.dataCadastro ? String(aluno.dataCadastro).slice(0,10) : hojeStr);
+    var guard = 0;
+    while (guard < 130){
+      guard++;
+      var periodo = periodoDoCiclo(tipo, cursor);
+      if (!pagamentosPorChave[periodo.chaveReferencia] && !periodoTemPagamentoLiquidado(periodo, intervalosPagos)){
+        criarContainerDoPeriodo(aluno, periodo);
+        pagamentosPorChave[periodo.chaveReferencia] = true;
+      }
+      if (periodo.chaveReferencia === periodoAtual.chaveReferencia) break;
+      cursor = addDias(periodo.fim, 1);
+    }
   }
 
   // Roda uma vez a cada carregamento de dados: garante que todo aluno ativo
@@ -1549,6 +1736,7 @@ import './styles.css';
       state.pagamentos.forEach(function(p){
         if (p.alunoId===aluno.id && p.chaveReferencia) pagamentosPorChave[p.chaveReferencia] = p;
       });
+      var intervalosPagos = intervalosPagosDoAluno(aluno);
 
       var periodoAtual = periodoDoCiclo(tipo, hojeStr);
       var cursor = (aluno.dataCadastro ? String(aluno.dataCadastro).slice(0,10) : hojeStr);
@@ -1558,20 +1746,34 @@ import './styles.css';
         var periodo = periodoDoCiclo(tipo, cursor);
         var existente = pagamentosPorChave[periodo.chaveReferencia];
         if (!existente){
-          criarContainerDoPeriodo(aluno, periodo);
-          pagamentosPorChave[periodo.chaveReferencia] = true;
-          criouAlgo = true;
+          // Nunca cria um lançamento para um período que se sobreponha a uma
+          // cobrança JÁ PAGA (ex.: após trocar o tipo de mensal p/ semanal, as
+          // semanas de um mês já quitado não viram cobranças novas).
+          if (!periodoTemPagamentoLiquidado(periodo, intervalosPagos)){
+            criarContainerDoPeriodo(aluno, periodo);
+            pagamentosPorChave[periodo.chaveReferencia] = true;
+            criouAlgo = true;
+          }
         } else if (existente.status === "pendente"){
           // Reconcilia um lançamento pendente já existente (inclusive
           // lançamentos legados, de antes dessa automação, que podem ter o
           // vencimento calculado do jeito antigo) com o vencimento e rótulo
-          // corretos de hoje. Nunca mexe em valor aqui — só data/rótulo — e
-          // nunca toca em lançamento já pago.
-          var vencCorreto = calcularVencimentoPeriodo(periodo.fim, aluno.plano.diasVencimento);
+          // corretos de hoje. Para fixa/por_aula nunca mexe em valor aqui —
+          // só data/rótulo. O modo antecipado "agendadas" é a exceção: seu
+          // valor acompanha a agenda do mês enquanto estiver pendente, então
+          // é recalculado aqui a cada carregamento. Nunca toca em pago.
+          var vencCorreto = vencimentoDoPeriodo(aluno, periodo);
           if (existente.dataVencimento !== vencCorreto || existente.referencia !== periodo.labelPeriodo){
             existente.dataVencimento = vencCorreto;
             existente.referencia = periodo.labelPeriodo;
             criouAlgo = true;
+          }
+          if (aluno.plano.cobranca === "agendadas"){
+            var valorAgendadas = contarAulasAgendadasNoPeriodo(aluno, periodo) * aluno.plano.valorAula;
+            if (existente.valor !== valorAgendadas){
+              existente.valor = valorAgendadas;
+              criouAlgo = true;
+            }
           }
         }
         if (periodo.chaveReferencia === periodoAtual.chaveReferencia) break;
@@ -4068,7 +4270,7 @@ import './styles.css';
         return c.alunoId===aluno.id && c.data.slice(0,7)===mesStr && c.status!=="cancelada" && c.status!=="remarcada";
       });
       if (aulasDoAlunoNoMes.length===0) return;
-      if (aluno.plano.cobranca === "por_aula"){
+      if (aluno.plano.cobranca === "por_aula" || aluno.plano.cobranca === "agendadas"){
         total += aulasDoAlunoNoMes.length * aluno.plano.valorAula;
       } else if (aluno.plano.tipo === "semanal"){
         var semanas = {};
@@ -4087,20 +4289,23 @@ import './styles.css';
 
   function calcularRecebidoMes(mesStr, alunoId){
     return state.pagamentos.filter(function(p){
-      return p.status==="pago" && p.dataPagamento && p.dataPagamento.slice(0,7)===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
+      return p.status==="pago" && financeiroMesDoPagamento(p)===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
     }).reduce(function(s,p){ return s+p.valor; }, 0);
   }
 
   function calcularPendenteMes(mesStr, alunoId){
     return state.pagamentos.filter(function(p){
-      return p.status==="pendente" && p.mesReferencia===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
+      return p.status==="pendente" && financeiroMesDoPagamento(p)===mesStr && (!alunoId || alunoId==="todos" || p.alunoId===alunoId);
     }).reduce(function(s,p){ return s+p.valor; }, 0);
   }
 
-  // mês "dono" de um pagamento, para agrupar pendentes e pagos sob o mesmo critério de período
+  // Mês "dono" de um pagamento = a COMPETÊNCIA (mês das aulas), para
+  // pendentes e pagos sob o mesmo critério. Nunca usa a data de pagamento
+  // nem a de vencimento como agrupador: uma mensalidade de outubro que vence
+  // (e é paga) em novembro continua pertencendo a outubro. A data de
+  // vencimento permanece apenas como informação exibida na linha.
   function financeiroMesDoPagamento(p){
-    if (p.status==="pago") return (p.dataPagamento||"").slice(0,7);
-    return p.mesReferencia || (p.dataVencimento||"").slice(0,7);
+    return p.mesReferencia || (p.dataVencimento||"").slice(0,7) || (p.dataPagamento||"").slice(0,7);
   }
 
   function renderVisaoMensal(){
