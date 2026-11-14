@@ -649,6 +649,7 @@
             <select id="f-plano-cobranca" onchange="atualizarCamposPlano()">
               <option value="fixa">Valor fixo no período</option>
               <option value="por_aula">Valor por aula dada</option>
+              <option value="agendadas">Antecipado por aulas agendadas no mês</option>
             </select>
           </div>
         </div>
@@ -662,9 +663,9 @@
           <input id="f-plano-valor-aula" type="number" min="0" step="0.01" placeholder="Ex: 110,00">
         </div>
         <div class="field" id="campo-dias-vencimento">
-          <label for="f-plano-dias-vencimento">Vencimento (dias após o fim do período)</label>
+          <label for="f-plano-dias-vencimento" id="label-dias-vencimento">Vencimento (dias após o fim do período)</label>
           <input id="f-plano-dias-vencimento" type="number" min="0" step="1" placeholder="Ex: 5">
-          <div class="hint">A cobrança do mês/semana é lançada automaticamente; isso só define quantos dias depois do fim do período ela vence. Ex: mensal com 5 = vence no dia 5 do mês seguinte.</div>
+          <div class="hint" id="hint-dias-vencimento">A cobrança do mês/semana é lançada automaticamente; isso só define quantos dias depois do fim do período ela vence. Ex: mensal com 5 = vence no dia 5 do mês seguinte.</div>
         </div>
       </div>
       <div class="modal-section">
