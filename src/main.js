@@ -70,7 +70,21 @@ import './styles.css';
       return v.toString(16);
     });
   }
-  function fmtData(d){ return d.toISOString().slice(0,10); }
+  // Data do calendário LOCAL (não UTC). Usar toISOString() aqui deslocava a
+  // data em +1 dia sempre que o horário local já tivesse cruzado a meia-noite
+  // em UTC (à noite no horário de Brasília): a agenda do "hoje" e, sobretudo,
+  // a geração de aulas recorrentes gravavam o dia seguinte (sexta virava
+  // sábado) e, por o conjunto de datas mudar conforme a hora da geração, o
+  // guard antiduplicata não reconhecia a grade existente e a recriava inteira.
+  // Todos os chamadores constroem o Date em termos locais (new Date(),
+  // new Date(ano,mes,dia) ou new Date("...T00:00:00")), então formatar pelo
+  // dia local é o correto em todos eles.
+  function fmtData(d){
+    var ano = d.getFullYear();
+    var mes = String(d.getMonth()+1).padStart(2,"0");
+    var dia = String(d.getDate()).padStart(2,"0");
+    return ano+"-"+mes+"-"+dia;
+  }
   function fmtDataBR(iso){
     var p = iso.split("-");
     return p[2]+"/"+p[1]+"/"+p[0];
