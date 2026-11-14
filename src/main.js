@@ -956,8 +956,14 @@ import './styles.css';
     // mudam). O plano atual do aluno ainda é o ANTIGO neste ponto (o novo só
     // é aplicado em concluirSalvarAluno).
     var vaiRecalcular = false, qtdPendentes = 0;
+    // Só mexe na grade de aulas recorrentes quando a recorrência REALMENTE
+    // mudou. Assim, trocar só a forma de pagamento (ou qualquer outro campo)
+    // não apaga/recria as aulas futuras do aluno. Aluno novo sempre gera.
+    var deveRegerarRecorrencia = true;
     if (editando){
-      var planoAntigo = getAluno(editingAlunoId).plano;
+      var alunoAtual = getAluno(editingAlunoId);
+      var planoAntigo = alunoAtual.plano;
+      deveRegerarRecorrencia = !horariosIguais(alunoAtual.recorrencia && alunoAtual.recorrencia.horarios, horariosRecorrencia);
       if (planoMudou(planoAntigo, dados.plano)){
         qtdPendentes = state.pagamentos.filter(function(p){
           return p.alunoId===editingAlunoId && p.status==="pendente";
@@ -986,10 +992,10 @@ import './styles.css';
           "Recalcular cobranças em aberto",
           "Você alterou a forma de pagamento deste aluno. Isso vai recalcular "+qtdPendentes+" cobrança(s) em aberto conforme o novo plano. Cobranças já pagas não são alteradas. Deseja continuar?",
           "Recalcular e salvar",
-          function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando, true); }
+          function(){ concluirSalvarAluno(dados, horariosRecorrencia, editando, true, deveRegerarRecorrencia); }
         );
       } else {
-        concluirSalvarAluno(dados, horariosRecorrencia, editando, false);
+        concluirSalvarAluno(dados, horariosRecorrencia, editando, false, deveRegerarRecorrencia);
       }
     }
 
@@ -1007,6 +1013,15 @@ import './styles.css';
     }
     finalizarSalvamento();
   };
+
+  // Compara dois mapas de horários de recorrência (dia da semana -> "HH:MM").
+  // Iguais => a grade recorrente não mudou nesta edição.
+  function horariosIguais(a, b){
+    a = a || {}; b = b || {};
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    return ka.every(function(k){ return a[k] === b[k]; });
+  }
 
   // Compara os campos do plano que afetam a geração de cobranças. Mudou
   // qualquer um deles => cobranças em aberto precisam ser recalculadas.
@@ -1075,7 +1090,7 @@ import './styles.css';
     return "Está(ão) fora da sua disponibilidade configurada: " + linhas.join(", ") + ".";
   }
 
-  function concluirSalvarAluno(dados, horariosRecorrencia, editando, recalcular){
+  function concluirSalvarAluno(dados, horariosRecorrencia, editando, recalcular, regerarRecorrencia){
     var alunoId;
     if (editando){
       var alunoExistente = getAluno(editingAlunoId);
@@ -1088,12 +1103,16 @@ import './styles.css';
       alunoId = dados.id;
     }
 
-    salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular);
+    salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular, regerarRecorrencia);
   }
 
-  async function salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular){
-    var idsParaRemover = editando ? limparAulasRecorrenciaFutura(alunoId) : [];
-    var geradas = Object.keys(horariosRecorrencia).length > 0 ? gerarAulasAPartirDaRecorrencia(alunoId) : [];
+  async function salvarAlunoContinuacao(alunoId, horariosRecorrencia, editando, recalcular, regerarRecorrencia){
+    // Só apaga/regera a grade recorrente quando a recorrência mudou (ou é
+    // aluno novo). Editar só o pagamento, por exemplo, preserva as aulas
+    // futuras já existentes.
+    var regerar = regerarRecorrencia !== false;
+    var idsParaRemover = (editando && regerar) ? limparAulasRecorrenciaFutura(alunoId) : [];
+    var geradas = (regerar && Object.keys(horariosRecorrencia).length > 0) ? gerarAulasAPartirDaRecorrencia(alunoId) : [];
 
     // Recalcula as cobranças em aberto DEPOIS de atualizar a agenda recorrente,
     // para que o modo antecipado (por aulas agendadas) e o por-aula reflitam a
@@ -1133,6 +1152,10 @@ import './styles.css';
       mostrarToast(removidas+" aula(s) futura(s) do padrão antigo foram removidas da agenda.");
     } else if (geradas.length > 0){
       mostrarToast(mensagemRecorrencia(r.salvas, r.rejeitadas, r.naoConfirmadas));
+    } else if (editando){
+      // Edição sem mudança de recorrência (ex.: só a forma de pagamento):
+      // a grade de aulas futuras foi preservada.
+      mostrarToast("Aluno atualizado.");
     }
   };
 
