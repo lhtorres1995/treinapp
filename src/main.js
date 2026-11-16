@@ -1669,15 +1669,18 @@ import './styles.css';
   // de período padrão (ex.: ajustes avulsos).
   function intervaloDaChave(chave){
     if (!chave) return null;
-    // Extrai só a parte de data da chave, ignorando sufixos (ex.: chaves de
-    // ajuste "mes-2026-10-ajuste-<id>"). Sem isso, um Date inválido quebraria
-    // periodoDoCiclo/fmtData com RangeError.
-    var m = /^mes-(\d{4}-\d{2})/.exec(chave);
+    // Só uma chave de período PADRÃO ("mes-AAAA-MM" ou "semana-AAAA-MM-DD",
+    // exatas) representa o período inteiro. Chaves de AJUSTE
+    // ("mes-AAAA-MM-ajuste-<id>") cobrem apenas a aula específica, não o mês:
+    // a regex é ancorada (^...$) para NÃO casar com elas — assim o ajuste cai
+    // no fallback por data da aula (aula_ids) em intervalosPagosDoAluno, em vez
+    // de "liquidar" o mês inteiro e impedir a criação do título do período.
+    var m = /^mes-(\d{4}-\d{2})$/.exec(chave);
     if (m){
       var pm = periodoDoCiclo("mensal", m[1]+"-01");
       return { inicio: pm.inicio, fim: pm.fim };
     }
-    var s = /^semana-(\d{4}-\d{2}-\d{2})/.exec(chave);
+    var s = /^semana-(\d{4}-\d{2}-\d{2})$/.exec(chave);
     if (s){
       var ps = periodoDoCiclo("semanal", s[1]);
       return { inicio: ps.inicio, fim: ps.fim };
